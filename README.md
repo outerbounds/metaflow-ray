@@ -52,10 +52,6 @@ def train(self):
     # Your ray application code here
 ```
 
-4. Run Your Metaflow flow
-Now, when you execute your Metaflow flow, the steps decorated with @ray_parallel will automatically spin up a 
-Ray cluster and execute your Ray code.
-
 ### Examples
 Check out the [examples](/examples) directory for sample Metaflow flows that demonstrate how to use the `metaflow-ray`extension 
 with various Ray applications.
