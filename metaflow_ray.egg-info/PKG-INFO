@@ -1,0 +1,7 @@
+Metadata-Version: 2.1
+Name: metaflow-ray
+Version: 0.0.1
+Summary: An EXPERIMENTAL Ray decorator for Metaflow
+Author: Riley Hun
+Author-email: riley.hun@autodesk.com
+License-File: LICENSE
