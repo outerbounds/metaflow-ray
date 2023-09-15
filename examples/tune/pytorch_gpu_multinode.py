@@ -1,18 +1,22 @@
-from metaflow import FlowSpec, step, batch, S3, conda, current, card, ray_parallel
+from metaflow import FlowSpec, step, batch, S3, pypi, current, card, ray_parallel
 from metaflow.cards import Image
 from metaflow.metaflow_config import DATATOOLS_S3ROOT
 from decorators import gpu_profile
 
 NUM_NODES = 4
 RESOURCES = dict(memory=12228, cpu=8, gpu=1)
-CONDA_DEP = dict(
-    libraries={"pytorch::pytorch": "2.0.1", "pytorch::torchvision": "0.15.2"},
-    pip_packages={"ray[air]": "", "pandas": "2.0.3", "matplotlib": "3.7.2"},
-)
+COMMON_PKGS = {
+    "torch": "2.0.1",
+    "torchvision": "0.15.2",
+    "ray": "2.6.3",
+    "metaflow-ray": "0.0.1",
+    "pandas": "2.1.0",
+    "matplotlib": "3.7.2",
+    "pyarrow": "13.0.0",
+}
 
 
 class RayTorchMultinodeGPU(FlowSpec):
-
     epoch_size = 1024
     test_size = 256
     num_samples = 20
@@ -20,18 +24,18 @@ class RayTorchMultinodeGPU(FlowSpec):
     n_cpu = 1  # RESOURCES['cpu']
     n_gpu = 0.25  # RESOURCES['gpu']
 
+    @pypi(packages=COMMON_PKGS)
     @step
     def start(self):
         self.next(self.tune, num_parallel=NUM_NODES)
 
+    @pypi(packages=COMMON_PKGS)
     @gpu_profile(interval=1)
-    @conda(**CONDA_DEP)
     @batch(**RESOURCES)
     @ray_parallel
     @card
     @step
     def tune(self):
-
         from pytorch_example import train_mnist, run, plot
         from matplotlib import pyplot as plt
         from functools import partial
@@ -66,10 +70,12 @@ class RayTorchMultinodeGPU(FlowSpec):
 
         self.next(self.join)
 
+    @pypi(packages=COMMON_PKGS)
     @step
     def join(self, inputs):
         self.next(self.end)
 
+    @pypi(packages=COMMON_PKGS)
     @step
     def end(self):
         pass
