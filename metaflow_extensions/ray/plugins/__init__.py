@@ -109,9 +109,12 @@ def setup_ray_distributed(
     # num_nodes = current.parallel.num_nodes
     # node_index = current.parallel.node_index
 
-    # AWS Batch-specific workaround.
-    num_nodes = int(os.environ["AWS_BATCH_JOB_NUM_NODES"])
-    node_index = os.environ["AWS_BATCH_JOB_NODE_INDEX"]
+    if "AWS_BATCH_JOB_ID" in os.environ:
+        num_nodes = int(os.environ["AWS_BATCH_JOB_NUM_NODES"])
+        node_index = os.environ["AWS_BATCH_JOB_NODE_INDEX"]
+    else: # kubernetes
+        num_nodes = int(os.environ["WORLD_SIZE"])
+        node_index = os.environ["RANK"]
     node_key = os.path.join(RAY_NODE_STARTED_VAR, "node_%s.json" % node_index)
     current._update_env({'num_nodes': num_nodes})
 
@@ -122,7 +125,11 @@ def setup_ray_distributed(
         local_ips = socket.gethostbyname_ex(socket.gethostname())[-1]
         main_ip = local_ips[0]
     else: 
-        main_ip = os.environ['AWS_BATCH_JOB_MAIN_NODE_PRIVATE_IPV4_ADDRESS']
+        if "AWS_BATCH_JOB_ID" in os.environ:
+            main_ip = os.environ['AWS_BATCH_JOB_MAIN_NODE_PRIVATE_IPV4_ADDRESS']
+        else:
+            main_hostname = os.environ['MASTER_ADDR']
+            main_ip = socket.gethostbyname(main_hostname)
     
     try:
         main_port = main_port or (6379 + abs(int(current.run_id)) % 1000)
