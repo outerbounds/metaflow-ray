@@ -1,35 +1,33 @@
-from metaflow import FlowSpec, step, batch, Parameter, S3, current, pip_base
+from metaflow import FlowSpec, step, batch, Parameter, S3, current, pypi
 from metaflow.metaflow_config import DATATOOLS_S3ROOT
 
+COMMON_PKGS = {
+    "ray": "2.6.3",
+    "metaflow-ray": "0.0.1",
+    "pandas": "2.1.0",
+    "xgboost": "2.0.0",
+    "xgboost-ray": "0.1.18",
+    "pyarrow": "13.0.0",
+    "matplotlib": "3.7.3",
+}
 DATA_URL = "s3://outerbounds-datasets/ubiquant/investment_ids"
 RESOURCES = dict(memory=32000, cpu=8, use_tmpfs=True, tmpfs_size=8000)
-DEPS = dict(
-    packages={
-        "ray": "2.6.3",
-        "xgboost": "",
-        "xgboost_ray": "",
-        "s3fs": "",
-        "matplotlib": "",
-        "pyarrow": "",
-    },
-)
 
 
-@pip_base(**DEPS)
 class RayXGBoostCPU(FlowSpec):
-
     n_files = 500
     n_cpu = RESOURCES["cpu"]
     s3_url = DATA_URL
 
+    @pypi(packages=COMMON_PKGS)
     @step
     def start(self):
         self.next(self.train)
 
+    @pypi(packages=COMMON_PKGS)
     @batch(**RESOURCES)
     @step
     def train(self):
-
         import os
         import ray
         from metaflow import S3
@@ -47,11 +45,11 @@ class RayXGBoostCPU(FlowSpec):
             n_cpu=self.n_cpu,
             objective="reg:squarederror",
             eval_metric=["rmse"],
-            run_config_storage_path=self.checkpoint_path,
         )
 
         self.next(self.end)
 
+    @pypi(packages=COMMON_PKGS)
     @step
     def end(self):
         print(self.result.metrics)

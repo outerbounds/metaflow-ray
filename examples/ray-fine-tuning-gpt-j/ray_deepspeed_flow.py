@@ -2,18 +2,17 @@ import logging
 import sys
 import os
 from metaflow import (
-    ray_parallel,
+    metaflow_ray,
     parallel,
     FlowSpec,
     step,
     batch,
     current,
-    conda_base,
-    conda,
+    pypi,
     environment,
     IncludeFile,
     Parameter,
-    Task
+    Task,
 )
 from custom_decorators import pip, enable_decorator
 from gpu_profile import gpu_profile
@@ -34,21 +33,17 @@ class RayDeepspeedFlow(FlowSpec):
         "num_workers", help="Number of nodes in cluster", default=16
     )
 
-    batch_size = Parameter(
-        "batch_size", help="Batch size", default=16
-    )
+    batch_size = Parameter("batch_size", help="Batch size", default=16)
 
-    epochs = Parameter(
-        "epochs", help="Number of epochs", default=1
-    )
+    epochs = Parameter("epochs", help="Number of epochs", default=1)
 
     storage_path = Parameter(
-        "storage_path", help="Storage Path", default="s3://ampstrn-c-uw2-s3-amp/checkpoint/ray-deepspeed"
+        "storage_path",
+        help="Storage Path",
+        default="s3://ampstrn-c-uw2-s3-amp/checkpoint/ray-deepspeed",
     )
 
-    use_gpu = Parameter(
-        "use_gpu", help="Use GPU?", default=True
-    )
+    use_gpu = Parameter("use_gpu", help="Use GPU?", default=True)
 
     @step
     def start(self):
@@ -66,34 +61,44 @@ class RayDeepspeedFlow(FlowSpec):
             "NCCL_DEBUG": "INFO",
             "NCCL_SOCKET_IFNAME": "eth0",
             "CURL_CA_BUNDLE": "",
-            "CUDA_HOME": "/usr/local/cuda"
+            "CUDA_HOME": "/usr/local/cuda",
         }
     )
     @enable_decorator(
-        batch(gpu=N_GPU, cpu=N_CPU, memory=MEMORY, queue=QUEUE_NAME, shared_memory=12000, use_tmpfs=True),
-        flag=os.getenv("EN_BATCH")
+        batch(
+            gpu=N_GPU,
+            cpu=N_CPU,
+            memory=MEMORY,
+            queue=QUEUE_NAME,
+            shared_memory=12000,
+            use_tmpfs=True,
+        ),
+        flag=os.getenv("EN_BATCH"),
     )
-    @conda(libraries={
-        "nvidia::pytorch-cuda": "1.13.1",
-        "conda-forge::matplotlib": "3.5.3",
-        "conda-forge::pandas": "1.5.3",
-        "conda-forge::scikit-learn": "1.3.0",
-        "conda-forge::ninja": "1.11.1",
-        "conda-forge::deepspeed": "0.9.2"
-    },
-        python="3.9.10"
+    @conda(
+        libraries={
+            "nvidia::pytorch-cuda": "1.13.1",
+            "conda-forge::matplotlib": "3.5.3",
+            "conda-forge::pandas": "1.5.3",
+            "conda-forge::scikit-learn": "1.3.0",
+            "conda-forge::ninja": "1.11.1",
+            "conda-forge::deepspeed": "0.9.2",
+        },
+        python="3.9.10",
     )
-    @pip(libraries={
-        "opencv_python_headless": "4.5.5.62",
-        "pydantic": "1.10.12",
-        "datasets": "2.10.1",
-        "accelerate": "0.16.0",
-        "evaluate": "0.4.0",
-        "s3fs": "2023.6.0",
-        "requests": "2.27.1",
-        "transformers": "4.26.0"
-    })
-    @ray_parallel
+    @pip(
+        libraries={
+            "opencv_python_headless": "4.5.5.62",
+            "pydantic": "1.10.12",
+            "datasets": "2.10.1",
+            "accelerate": "0.16.0",
+            "evaluate": "0.4.0",
+            "s3fs": "2023.6.0",
+            "requests": "2.27.1",
+            "transformers": "4.26.0",
+        }
+    )
+    @metaflow_ray
     @step
     def train(self):
         import ray.data
@@ -121,7 +126,7 @@ class RayDeepspeedFlow(FlowSpec):
                         "torch==1.13.1",
                         "deepspeed==0.9.2",
                         "s3fs==2023.6.0",
-                        "requests==2.27.1"
+                        "requests==2.27.1",
                     ]
                 }
             )
@@ -145,7 +150,10 @@ class RayDeepspeedFlow(FlowSpec):
                     use_gpu=self.use_gpu
                     # resources_per_worker={"GPU": N_GPU, "CPU": int(N_CPU)-1}
                 ),
-                datasets={"train": ray_datasets["train"], "evaluation": ray_datasets["validation"]},
+                datasets={
+                    "train": ray_datasets["train"],
+                    "evaluation": ray_datasets["validation"],
+                },
                 preprocessor=Chain(splitter, tokenizer),
                 run_config=RunConfig(storage_path=self.storage_path),
             )

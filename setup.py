@@ -12,7 +12,5 @@ setup(
     py_modules=[
         "metaflow_extensions",
     ],
-    install_requires=[
-         "metaflow"
-    ]
+    install_requires=["metaflow"],
 )

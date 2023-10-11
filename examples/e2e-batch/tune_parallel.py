@@ -1,11 +1,19 @@
-from metaflow import FlowSpec, step, Parameter, current, batch, pip_base, ray_parallel
+from metaflow import FlowSpec, step, Parameter, current, batch, pypi, metaflow_ray
 from base import TabularBatchPrediction
 
 N_NODES = 8
+COMMON_PKGS = {
+    "ray": "2.6.3",
+    "metaflow-ray": "0.0.1",
+    "pandas": "2.1.0",
+    "xgboost": "2.0.0",
+    "xgboost-ray": "0.1.18",
+    "pyarrow": "13.0.0",
+    "matplotlib": "3.7.3",
+}
 
-@pip_base(packages={"ray[air]": "", "pandas": "", "xgboost": "", "xgboost-ray": "", "pyarrow": ""})
+
 class Tune(FlowSpec, TabularBatchPrediction):
-
     num_samples = Parameter(
         "n", help="Number of hyperparameter samples to run", default=10, type=int
     )
@@ -18,15 +26,16 @@ class Tune(FlowSpec, TabularBatchPrediction):
         "d", help="Direction to optimize", default="min", type=str
     )
 
+    @pypi(packages=COMMON_PKGS)
     @step
     def start(self):
         self.next(self.tune, num_parallel=N_NODES)
 
+    @pypi(packages=COMMON_PKGS)
     @batch
-    @ray_parallel
+    @metaflow_ray
     @step
     def tune(self):
-
         from metaflow.metaflow_config import DATATOOLS_S3ROOT
         from metaflow import current
         from ray.air.config import ScalingConfig
@@ -52,7 +61,7 @@ class Tune(FlowSpec, TabularBatchPrediction):
             },
         }
 
-        # self.checkpoint_path is automatically set by the @ray_parallel decorator
+        # self.checkpoint_path is automatically set by the @metaflow_ray decorator
         run_config = RunConfig(storage_path=self.checkpoint_path)
 
         # https://docs.ray.io/en/latest/tune/api/doc/ray.tune.TuneConfig.html
@@ -77,11 +86,13 @@ class Tune(FlowSpec, TabularBatchPrediction):
         self.result = results.get_best_result()
         self.next(self.join)
 
+    @pypi(packages=COMMON_PKGS)
     @step
     def join(self, inputs):
         self.merge_artifacts(inputs)
         self.next(self.end)
 
+    @pypi(packages=COMMON_PKGS)
     @step
     def end(self):
         print(

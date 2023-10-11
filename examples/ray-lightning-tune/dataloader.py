@@ -5,6 +5,7 @@ from torch.utils.data import DataLoader, random_split
 from filelock import FileLock
 import tempfile
 
+
 class MNISTDataModule(pl.LightningDataModule):
     def __init__(self, batch_size=128):
         super().__init__()

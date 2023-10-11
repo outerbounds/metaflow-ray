@@ -1,12 +1,12 @@
 from metaflow import (
     FlowSpec,
     step,
-    ray_parallel,
+    metaflow_ray,
     batch,
     card,
     current,
     environment,
-    pip_base,
+    pypi,
 )
 from decorators import gpu_profile
 from metaflow.metaflow_config import DATATOOLS_S3ROOT
@@ -14,30 +14,29 @@ from metaflow.metaflow_config import DATATOOLS_S3ROOT
 NUM_NODES = 2
 DATA_URL = "s3://outerbounds-datasets/ubiquant/investment_ids"
 RESOURCES = dict(cpu=4, gpu=1, memory=32000, use_tmpfs=True, tmpfs_size=8000)
-DEPS = dict(
-    packages={
-        "ray": "2.6.3",
-        "xgboost": "",
-        "xgboost_ray": "",
-        "s3fs": "",
-        "matplotlib": "",
-        "pyarrow": "",
-    },
-)
+COMMON_PKGS = {
+    "ray": "2.6.3",
+    "metaflow-ray": "0.0.1",
+    "pandas": "2.1.0",
+    "xgboost": "2.0.0",
+    "xgboost-ray": "0.1.18",
+    "pyarrow": "13.0.0",
+    "matplotlib": "3.7.3",
+}
 
 
-@pip_base(**DEPS)
 class RayXGBoostMultinodeGPU(FlowSpec):
-
     n_files = 1500
     n_cpu = RESOURCES["cpu"]
     n_gpu = RESOURCES["gpu"]
     s3_url = DATA_URL
 
+    @pypi(packages=COMMON_PKGS)
     @step
     def start(self):
         self.next(self.train, num_parallel=NUM_NODES)
 
+    @pypi(packages=COMMON_PKGS)
     @environment(
         vars={
             "NVIDIA_DRIVER_CAPABILITIES": "compute,utility",
@@ -46,20 +45,19 @@ class RayXGBoostMultinodeGPU(FlowSpec):
             "NCCL_SOCKET_IFNAME": "eth0",
         }
     )
-    @ray_parallel
+    @metaflow_ray
     @gpu_profile(interval=1)
     @batch(**RESOURCES)
     @card
     @step
     def train(self):
-
         import os
         import ray
         from metaflow import S3
         from table_loader import load_table
         from xgb_example import load_data, fit_model
 
-        # Initialize ray driver on the cluster @ray_parallel created.
+        # Initialize ray driver on the cluster @metaflow_ray created.
         ray.init()
 
         # Load many files from S3 using Metaflow + PyArrow.
@@ -80,14 +78,16 @@ class RayXGBoostMultinodeGPU(FlowSpec):
 
         self.next(self.join)
 
+    @pypi(packages=COMMON_PKGS)
     @step
     def join(self, inputs):
         self.merge_artifacts(inputs)
         self.next(self.end)
 
+    @pypi(packages=COMMON_PKGS)
     @step
     def end(self):
-        print(self.result)
+        print(self.result.path)
 
 
 if __name__ == "__main__":

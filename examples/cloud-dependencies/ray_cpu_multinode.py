@@ -1,4 +1,4 @@
-from metaflow import FlowSpec, step, ray_parallel, batch, current
+from metaflow import FlowSpec, step, metaflow_ray, batch, current
 
 N_NODES = 2
 N_CPU = 8
@@ -24,7 +24,7 @@ class RayCPU(FlowSpec):
         self.next(self.big_step, num_parallel=N_NODES)
 
     @batch(image="rayproject/ray", cpu=N_CPU, memory=MEMORY)
-    @ray_parallel
+    @metaflow_ray
     @step
     def big_step(self):
         self._do_ray_job()
