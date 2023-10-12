@@ -1,38 +1,58 @@
-from metaflow import FlowSpec, step, batch, Parameter, S3, current, card, conda, pip, ray_parallel, Parameter, \
-    IncludeFile
+from metaflow import (
+    FlowSpec,
+    step,
+    batch,
+    Parameter,
+    S3,
+    current,
+    card,
+    pypi,
+    metaflow_ray,
+    Parameter,
+    IncludeFile,
+)
 from decorators import gpu_profile
 
 NUM_NODES = 4
-RESOURCES = dict(memory=12228, cpu=8, gpu=1, queue="hunr-g5-queue")
-CONDA_DEP = dict(
-    libraries={"pytorch::pytorch": "2.0.1", "pytorch::torchvision": "0.15.2"},
-    pip_packages={"ray[air]": "", "pandas": "2.0.3", "matplotlib": "3.7.2", "optuna": "", "pytorch-lightning": "",
-                  "torchmetrics": ""},
-)
+RESOURCES = dict(memory=12228, cpu=8, gpu=1)
+COMMON_PKGS = {
+    "torch": "2.0.1",
+    "torchvision": "0.15.2",
+    "ray": "2.6.3",
+    "metaflow-ray": "0.0.1",
+    "pandas": "2.1.0",
+    "matplotlib": "3.7.2",
+    "optuna": "3.3.0",
+    "pytorch-lightning": "2.0.9",
+    "torchmetrics": "1.1.2",
+    "pyarrow": "13.0.0",
+    "tensorboard": "2.14.0",
+}
 
 
 class RayLightningTuneFlow(FlowSpec):
-    default_config = IncludeFile(name="config", default="config.json", help="config file")
+    # default_config = IncludeFile(name="config", default="config.json", help="config file")
 
-    num_epochs = Parameter("num_epochs", default=5, help="Number of epochs for training")
-
-    num_samples = Parameter("num_samples", default=10, help="Number of samples from parameter space")
-
+    num_epochs = Parameter(
+        "num_epochs", default=5, help="Number of epochs for training"
+    )
+    num_samples = Parameter(
+        "num_samples", default=10, help="Number of samples from parameter space"
+    )
     num_worker_nodes = NUM_NODES
-
     n_cpu = RESOURCES["cpu"] - 1
-
     n_gpu = RESOURCES["gpu"]
 
     batch_size = Parameter("batch_size", default=64, help="Batch size")
 
+    @pypi(packages=COMMON_PKGS)
     @step
     def start(self):
         self.next(self.tune, num_parallel=NUM_NODES)
 
+    @pypi(packages=COMMON_PKGS)
     @gpu_profile(interval=1)
-    @conda(**CONDA_DEP)
-    @ray_parallel
+    @metaflow_ray
     @batch(**RESOURCES)
     @card
     @step
@@ -50,7 +70,9 @@ class RayLightningTuneFlow(FlowSpec):
         ray.init()
 
         dm = MNISTDataModule(batch_size=self.batch_size)
-        logger = TensorBoardLogger(save_dir=os.getcwd(), name="tune-ptl-example", version=".")
+        logger = TensorBoardLogger(
+            save_dir=os.getcwd(), name="tune-ptl-example", version="."
+        )
 
         # Static configs that does not change across trials
         static_lightning_config = (
@@ -65,11 +87,13 @@ class RayLightningTuneFlow(FlowSpec):
         # Searchable configs across different trials
         searchable_lightning_config = (
             LightningConfigBuilder()
-            .module(config={
-                "layer_1_size": tune.choice([32, 64, 128]),
-                "layer_2_size": tune.choice([64, 128, 256]),
-                "lr": tune.loguniform(1e-4, 1e-1),
-            })
+            .module(
+                config={
+                    "layer_1_size": tune.choice([32, 64, 128]),
+                    "layer_2_size": tune.choice([64, 128, 256]),
+                    "lr": tune.loguniform(1e-4, 1e-1),
+                }
+            )
             .build()
         )
 
@@ -83,9 +107,13 @@ class RayLightningTuneFlow(FlowSpec):
             ),
         )
 
-        scheduler = ASHAScheduler(max_t=self.num_epochs, grace_period=1, reduction_factor=2)
+        scheduler = ASHAScheduler(
+            max_t=self.num_epochs, grace_period=1, reduction_factor=2
+        )
         scaling_config = ScalingConfig(
-            num_workers=self.num_worker_nodes, use_gpu=True, resources_per_worker={"CPU": self.n_cpu, "GPU": self.n_gpu}
+            num_workers=self.num_worker_nodes,
+            use_gpu=True,
+            resources_per_worker={"CPU": self.n_cpu, "GPU": self.n_gpu},
         )
 
         lightning_trainer = LightningTrainer(
@@ -95,7 +123,9 @@ class RayLightningTuneFlow(FlowSpec):
         )
 
         def tune_mnist_asha(number_samples=10):
-            scheduler = ASHAScheduler(max_t=self.num_epochs, grace_period=1, reduction_factor=2)
+            scheduler = ASHAScheduler(
+                max_t=self.num_epochs, grace_period=1, reduction_factor=2
+            )
 
             tuner = tune.Tuner(
                 lightning_trainer,
@@ -120,10 +150,12 @@ class RayLightningTuneFlow(FlowSpec):
 
         self.next(self.join)
 
+    @pypi(packages=COMMON_PKGS)
     @step
     def join(self, inputs):
         self.next(self.end)
 
+    @pypi(packages=COMMON_PKGS)
     @step
     def end(self):
         pass

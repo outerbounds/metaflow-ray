@@ -3,6 +3,7 @@ import torch
 import torch.nn.functional as F
 from torchmetrics import Accuracy
 
+
 class MNISTClassifier(pl.LightningModule):
     def __init__(self, config):
         super(MNISTClassifier, self).__init__()

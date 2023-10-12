@@ -6,7 +6,6 @@ from ray.train.xgboost import XGBoostPredictor
 from ray.train.batch_predictor import BatchPredictor
 from typing import List, Dict
 
-
 app = FastAPI()
 
 
@@ -22,15 +21,14 @@ def select_from_checkpoint_registry(flow_name="Train"):
 @serve.deployment(num_replicas=2, ray_actor_options={"num_cpus": 0.2, "num_gpus": 0})
 @serve.ingress(app)
 class BatchPredictionService:
-    
     def __init__(self):
         checkpoint = select_from_checkpoint_registry()
         self.predictor = BatchPredictor.from_checkpoint(checkpoint, XGBoostPredictor)
 
     @app.post("/")
-    def hello(self) -> str:
+    def hello(self) -> Dict[str, str]:
         print("Hello Server Logs!")
-        return "Hello World!"
+        return {"response": "Hello World!"}
 
     @app.post("/predict/")
     def predict(
@@ -42,8 +40,9 @@ class BatchPredictionService:
         return id_to_preds_payload
 
     @app.post("/swap-model/")
-    def swap_model(self):
-        return "TODO"
+    def swap_model(self) -> Dict[str, str]:
+        raise NotImplementedError
+        return {"response": "TODO"}
 
 
 batch_preds = BatchPredictionService.bind()

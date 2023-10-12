@@ -1,9 +1,11 @@
-from metaflow import FlowSpec, step, Parameter, current
+from metaflow import FlowSpec, step, Parameter, current, pypi
 from base import TabularBatchPrediction
+from utils import parse_reqs_txt
+
+COMMON_PKGS = parse_reqs_txt()
 
 
 class Tune(FlowSpec, TabularBatchPrediction):
-
     num_samples = Parameter(
         "n", help="Number of hyperparameter samples to run", default=10, type=int
     )
@@ -16,9 +18,9 @@ class Tune(FlowSpec, TabularBatchPrediction):
         "d", help="Direction to optimize", default="min", type=str
     )
 
+    @pypi(packages=COMMON_PKGS)
     @step
     def start(self):
-
         from metaflow.metaflow_config import DATATOOLS_S3ROOT
         from metaflow import current
         from ray.air.config import ScalingConfig
@@ -73,6 +75,7 @@ class Tune(FlowSpec, TabularBatchPrediction):
         self.result = results.get_best_result()
         self.next(self.end)
 
+    @pypi(packages=COMMON_PKGS)
     @step
     def end(self):
         print(

@@ -100,7 +100,7 @@ def trainer_init_per_worker(train_dataset, eval_dataset=None, **config):
                 use_cache=True,
                 resume_download=True,
                 trust_remote_code=True,
-                cache_dir='.cache/GPTJ-6B'
+                cache_dir=".cache/GPTJ-6B",
             )
             break
         except Exception as e:

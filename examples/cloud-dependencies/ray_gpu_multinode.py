@@ -1,4 +1,4 @@
-from metaflow import FlowSpec, step, ray_parallel, batch, current
+from metaflow import FlowSpec, step, metaflow_ray, batch, current
 from decorators import gpu_profile
 
 NUM_NODES = 2
@@ -23,7 +23,7 @@ class RayGPU(FlowSpec):
 
     @gpu_profile(interval=1)
     @batch(**RESOURCES, image="rayproject/ray:nightly-gpu")
-    @ray_parallel
+    @metaflow_ray
     @step
     def big_step(self):
         self._do_ray_job()

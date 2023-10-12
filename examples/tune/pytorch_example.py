@@ -80,7 +80,6 @@ def download_mnist():
 def train_mnist(
     config, epoch_size, test_size, dataset="mnist", smoke_test=True, n_epochs=10
 ):
-
     # Data Setup
     if dataset == "mnist":
         try:
@@ -173,7 +172,6 @@ def plot(results, ax=None):
 
 
 if __name__ == "__main__":
-
     search_space = {
         "lr": tune.sample_from(lambda spec: 10 ** (-10 * np.random.rand())),
         "momentum": tune.uniform(0.1, 0.9),

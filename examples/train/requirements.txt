@@ -1,0 +1,8 @@
+ray==2.6.3
+metaflow==2.9.13
+metaflow-ray==0.0.1
+pandas==2.1.0
+xgboost==2.0.0
+xgboost-ray==0.1.18
+pyarrow==13.0.0
+matplotlib==3.7.3

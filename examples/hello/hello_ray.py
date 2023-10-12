@@ -9,6 +9,7 @@ ray.init()
 In recent versions of Ray (>=1.5), ray.init() is automatically called on the first use of a Ray remote API.
 """
 
+
 # Define the Counter actor.
 @ray.remote
 class Counter:

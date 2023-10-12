@@ -1,15 +1,32 @@
-from metaflow import FlowSpec, step, trigger_on_finish, current, Parameter, Flow, Run
+from metaflow import (
+    FlowSpec,
+    step,
+    trigger_on_finish,
+    current,
+    Parameter,
+    Flow,
+    Run,
+    pypi,
+)
 from base import TabularBatchPrediction
 
 PRODUCTION_THRESHOLD = 0.95
 PARENT_FLOW_1 = "Train"
 PARENT_FLOW_2 = "Tune"
 TRIGGERS = [PARENT_FLOW_1, PARENT_FLOW_2]
+COMMON_PKGS = {
+    "ray": "2.6.3",
+    "metaflow-ray": "0.0.1",
+    "pandas": "2.1.0",
+    "xgboost": "2.0.0",
+    "xgboost-ray": "0.1.18",
+    "pyarrow": "13.0.0",
+    "matplotlib": "3.7.3",
+}
 
 
 @trigger_on_finish(flows=TRIGGERS)
 class Score(FlowSpec, TabularBatchPrediction):
-
     upstream_flow = Parameter(
         "upstream", help="Upstream flow name", default=TRIGGERS[0], type=str
     )
@@ -19,9 +36,9 @@ class Score(FlowSpec, TabularBatchPrediction):
         true_targets = valid_dataset.select_columns(cols=["target"]).to_pandas()
         return true_targets, test_dataset
 
+    @pypi(packages=COMMON_PKGS)
     @step
     def start(self):
-
         import pandas as pd
 
         self.setup()
@@ -57,9 +74,9 @@ class Score(FlowSpec, TabularBatchPrediction):
             )
         self.next(self.end)
 
+    @pypi(packages=COMMON_PKGS)
     @step
     def end(self):
-
         run = Run(self.upstream_run_pathspec)
         df = self.score_results
         accuracy = (

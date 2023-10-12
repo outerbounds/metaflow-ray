@@ -1,17 +1,21 @@
-from metaflow import FlowSpec, step, batch, Parameter, S3, current, conda, card
+from metaflow import FlowSpec, step, batch, Parameter, S3, current, pypi, card
 from metaflow.cards import Image
 from metaflow.metaflow_config import DATATOOLS_S3ROOT
 from decorators import gpu_profile
 
 RESOURCES = dict(memory=12228, cpu=2, gpu=1)
-CONDA_DEP = dict(
-    libraries={"pytorch::pytorch": "2.0.1", "pytorch::torchvision": "0.15.2"},
-    pip_packages={"ray[air]": "", "pandas": "2.0.3", "matplotlib": "3.7.2"},
-)
+COMMON_PKGS = {
+    "torch": "2.0.1",
+    "torchvision": "0.15.2",
+    "ray": "2.6.3",
+    "metaflow-ray": "0.0.1",
+    "pandas": "2.1.0",
+    "matplotlib": "3.7.2",
+    "pyarrow": "13.0.0",
+}
 
 
 class RayTorchGPU(FlowSpec):
-
     epoch_size = 1024
     test_size = 256
     num_samples = 20
@@ -22,13 +26,12 @@ class RayTorchGPU(FlowSpec):
     def start(self):
         self.next(self.tune)
 
+    @pypi(packages=COMMON_PKGS)
     @gpu_profile(interval=1)
-    @conda(**CONDA_DEP)
     @batch(**RESOURCES)
     @card
     @step
     def tune(self):
-
         from functools import partial
         from pytorch_example import train_mnist, run, plot
         from matplotlib import pyplot as plt
@@ -49,11 +52,7 @@ class RayTorchGPU(FlowSpec):
             ),
         }
 
-        results_list = run(
-            search_space=search_space,
-            smoke_test=True,
-            run_config_storage_path=self.checkpoint_path,
-        )
+        results_list = run(search_space=search_space, smoke_test=True)
 
         fig, ax = plt.subplots(1, 1)
         result_dfs = plot(results_list, ax=ax)
@@ -62,6 +61,7 @@ class RayTorchGPU(FlowSpec):
 
         self.next(self.end)
 
+    @pypi(packages=COMMON_PKGS)
     @step
     def end(self):
         pass

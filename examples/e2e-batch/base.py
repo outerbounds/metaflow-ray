@@ -31,7 +31,6 @@ class LearningTask:
         # offline or online?
         # batch, streaming, realtime?
     ):
-
         # Idea:
         # 1 dataset per learning task,
         # 1 model per learning task,
@@ -107,7 +106,6 @@ class TabularBatchPrediction(LearningTask):
         n_gpu: int = 0,
         n_nodes: int = 1,
     ):
-
         if dataset_name is None:
             print(
                 "No dataset name or loader provided. Using default breast_cancer.csv dataset."
@@ -183,7 +181,6 @@ class TabularBatchPrediction(LearningTask):
         return XGBoostTrainer(**_trainer_args)
 
     def load_tuner(self, tuner_args: dict = {}):
-
         trainer = self.load_trainer()
 
         # https://docs.ray.io/en/latest/tune/api/doc/ray.tune.Tuner.html#ray.tune.Tuner
@@ -205,17 +202,19 @@ class TabularBatchPrediction(LearningTask):
 
         run_config = RunConfig(verbose=0)
 
-        _num_samples = self.num_samples if hasattr(self, 'num_samples') else self.hpo_num_samples
+        _num_samples = (
+            self.num_samples if hasattr(self, "num_samples") else self.hpo_num_samples
+        )
         print(f"Using {_num_samples} samples for HPO.")
         # https://docs.ray.io/en/latest/tune/api/doc/ray.tune.TuneConfig.html
         tune_config = tune.TuneConfig(
-            metric="valid-logloss", 
+            metric="valid-logloss",
             mode="min",
             search_alg=tune.search.basic_variant.BasicVariantGenerator(),
             scheduler=tune.schedulers.ASHAScheduler(),
-            num_samples = _num_samples,
-            time_budget_s = self.max_timeout,
-            max_concurrent_trials = self.n_nodes,
+            num_samples=_num_samples,
+            time_budget_s=self.max_timeout,
+            max_concurrent_trials=self.n_nodes,
         )
 
         _tuner_args = dict(
