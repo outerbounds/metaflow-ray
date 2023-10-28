@@ -292,6 +292,3 @@ class AllNodesStartupTimeoutException(MetaflowException):
     def __init__(self):
         msg = "Exiting job due to time out waiting for all workers to join cluster. You can set the timeout in @metaflow_ray(all_nodes_started_timeout=X)"
         super(AllNodesStartupTimeoutException, self).__init__(msg)
-
-
-STEP_DECORATORS_DESC = [("metaflow_ray", ".RayParallelDecorator")]
