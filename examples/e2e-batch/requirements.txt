@@ -1,6 +1,5 @@
-ray==2.6.3
-metaflow==2.9.13
-metaflow-ray==0.0.1
+ray[train,tune]==2.6.3
+metaflow==2.10.4
 pandas==2.1.0
 xgboost==2.0.0
 xgboost-ray==0.1.18

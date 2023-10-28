@@ -60,8 +60,7 @@ def fit_model(
     scaling_config = ScalingConfig(
         num_workers=num_workers,
         use_gpu=n_gpu > 0,
-        resources_per_worker={"CPU": n_cpu, "GPU": n_gpu},
-        _max_cpu_fraction_per_node=0.8,
+        resources_per_worker={"CPU": n_cpu, "GPU": n_gpu}
     )
     trainer = XGBoostTrainer(
         scaling_config=scaling_config,

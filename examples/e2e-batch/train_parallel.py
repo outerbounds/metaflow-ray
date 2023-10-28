@@ -1,9 +1,9 @@
 from metaflow import FlowSpec, step, current, metaflow_ray, batch, pypi
 from base import TabularBatchPrediction
 
-N_NODES = 8
+N_NODES = 2
 COMMON_PKGS = {
-    "ray": "2.6.3",
+    "ray[train]": "2.6.3",
     "metaflow-ray": "0.0.1",
     "pandas": "2.1.0",
     "xgboost": "2.0.0",

@@ -162,7 +162,7 @@ def run(
 
 
 def plot(results, ax=None):
-    dfs = {result.log_dir: result.metrics_dataframe for result in results}
+    dfs = {result.path: result.metrics_dataframe for result in results}
     for d in dfs.values():
         try:
             ax = d.mean_accuracy.plot(ax=ax, legend=False)

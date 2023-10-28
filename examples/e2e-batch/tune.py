@@ -2,7 +2,14 @@ from metaflow import FlowSpec, step, Parameter, current, pypi
 from base import TabularBatchPrediction
 from utils import parse_reqs_txt
 
-COMMON_PKGS = parse_reqs_txt()
+COMMON_PKGS = {
+    "ray[tune]": "2.6.3",
+    "pandas": "2.1.0",
+    "xgboost": "2.0.0",
+    "xgboost-ray": "0.1.18",
+    "pyarrow": "13.0.0",
+    "matplotlib": "3.7.3",
+}
 
 
 class Tune(FlowSpec, TabularBatchPrediction):
@@ -33,8 +40,7 @@ class Tune(FlowSpec, TabularBatchPrediction):
         # https://docs.ray.io/en/latest/tune/api/doc/ray.tune.Tuner.html#ray.tune.Tuner
         param_space = {
             "scaling_config": ScalingConfig(
-                num_workers=1,
-                _max_cpu_fraction_per_node=0.8,
+                num_workers=1
             ),
             "params": {
                 "objective": "binary:logistic",

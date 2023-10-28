@@ -16,8 +16,7 @@ RESOURCES = dict(memory=12228, cpu=4)
 COMMON_PKGS = {
     "torch": "2.0.1",
     "torchvision": "0.15.2",
-    "ray": "2.6.3",
-    "metaflow-ray": "0.0.1",
+    "ray[tune]": "2.7.1",
     "pandas": "2.1.0",
     "matplotlib": "3.7.2",
     "pyarrow": "13.0.0",
@@ -58,8 +57,7 @@ class RayTorchMultinodeCPU(FlowSpec):
             "momentum": ray.tune.uniform(0.1, 0.9),
             "scaling_config": ScalingConfig(
                 num_workers=self.num_workers,
-                resources_per_worker={"CPU": self.n_cpu},
-                _max_cpu_fraction_per_node=0.8,
+                resources_per_worker={"CPU": self.n_cpu}
             ),
         }
 

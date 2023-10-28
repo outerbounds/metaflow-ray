@@ -5,8 +5,7 @@ from metaflow.metaflow_config import DATATOOLS_S3ROOT
 DATA_URL = "s3://outerbounds-datasets/ubiquant/investment_ids"
 RESOURCES = dict(memory=16000, cpu=4, gpu=1, use_tmpfs=True, tmpfs_size=4000)
 COMMON_PKGS = {
-    "ray": "2.6.3",
-    "metaflow-ray": "0.0.1",
+    "ray[train]": "2.7.1",
     "pandas": "2.1.0",
     "xgboost": "2.0.0",
     "xgboost-ray": "0.1.18",

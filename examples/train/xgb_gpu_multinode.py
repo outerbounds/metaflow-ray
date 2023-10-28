@@ -15,8 +15,7 @@ NUM_NODES = 2
 DATA_URL = "s3://outerbounds-datasets/ubiquant/investment_ids"
 RESOURCES = dict(cpu=4, gpu=1, memory=32000, use_tmpfs=True, tmpfs_size=8000)
 COMMON_PKGS = {
-    "ray": "2.6.3",
-    "metaflow-ray": "0.0.1",
+    "ray[train]": "2.7.1",
     "pandas": "2.1.0",
     "xgboost": "2.0.0",
     "xgboost-ray": "0.1.18",

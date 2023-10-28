@@ -163,8 +163,7 @@ class TabularBatchPrediction(LearningTask):
             run_config=RunConfig(),
             scaling_config=ScalingConfig(
                 num_workers=self.n_nodes,
-                use_gpu=self.n_gpu > 0,
-                _max_cpu_fraction_per_node=0.9,
+                use_gpu=self.n_gpu > 0
             ),
             label_column="target",
             params=dict(
@@ -187,8 +186,7 @@ class TabularBatchPrediction(LearningTask):
         param_space = {
             "scaling_config": ScalingConfig(
                 num_workers=1,
-                # resources_per_worker={"CPU": 1},
-                _max_cpu_fraction_per_node=0.8,
+                # resources_per_worker={"CPU": 1}
             ),
             "params": {
                 "objective": "binary:logistic",

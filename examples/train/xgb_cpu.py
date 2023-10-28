@@ -2,8 +2,7 @@ from metaflow import FlowSpec, step, batch, Parameter, S3, current, pypi
 from metaflow.metaflow_config import DATATOOLS_S3ROOT
 
 COMMON_PKGS = {
-    "ray": "2.6.3",
-    "metaflow-ray": "0.0.1",
+    "ray[train]": "2.7.1",
     "pandas": "2.1.0",
     "xgboost": "2.0.0",
     "xgboost-ray": "0.1.18",
@@ -19,6 +18,7 @@ class RayXGBoostCPU(FlowSpec):
     n_cpu = RESOURCES["cpu"]
     s3_url = DATA_URL
 
+    @batch
     @pypi(packages=COMMON_PKGS)
     @step
     def start(self):
@@ -50,6 +50,7 @@ class RayXGBoostCPU(FlowSpec):
         self.next(self.end)
 
     @pypi(packages=COMMON_PKGS)
+    @batch
     @step
     def end(self):
         print(self.result.metrics)

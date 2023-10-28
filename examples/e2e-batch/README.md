@@ -24,3 +24,8 @@ python tune_parallel.py --environment=conda run
 ```
 python score.py --environment=conda
 ```
+
+## Serving
+```
+serve run server:batch_preds
+```

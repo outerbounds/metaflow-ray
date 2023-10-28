@@ -8,15 +8,12 @@ from typing import List, Dict
 
 app = FastAPI()
 
-
 def select_from_checkpoint_registry(flow_name="Train"):
     from metaflow import Flow
-
-    run = list(Flow(flow_name).runs("production_ready"))[0]
+    run = Flow(flow_name).latest_successful_run
     print("Using checkpoint from Run('{}')".format(run.pathspec))
     result = run.data.result
     return result.checkpoint
-
 
 @serve.deployment(num_replicas=2, ray_actor_options={"num_cpus": 0.2, "num_gpus": 0})
 @serve.ingress(app)
@@ -35,7 +32,10 @@ class BatchPredictionService:
         self, id_to_batch_features: Dict[str, Dict[str, float]]
     ) -> Dict[str, float]:
         features = ray.data.from_items(list(id_to_batch_features.values()))
+ 
+        # CHANGE THIS TO USE NEW PREDICTOR
         preds = self.predictor.predict(features).to_pandas()["predictions"].values
+
         id_to_preds_payload = dict(zip(id_to_batch_features.keys(), preds))
         return id_to_preds_payload
 
