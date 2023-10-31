@@ -1,6 +1,6 @@
 from setuptools import setup, find_namespace_packages
 
-version = "0.0.3"
+version = "0.0.4"
 
 setup(
     name="metaflow-ray",
@@ -12,5 +12,5 @@ setup(
     py_modules=[
         "metaflow_extensions",
     ],
-    install_requires=["metaflow"],
+    install_requires=[],
 )
