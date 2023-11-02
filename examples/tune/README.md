@@ -1,3 +1,7 @@
+# Introduction
+This set of examples uses Ray Tune to train many PyTorch models in parallel. 
+There are four example workflows showing the cross product of single- and multi-node with CPU and GPU runs.
+
 ## CPU single node
 ```
 python pytorch_cpu.py --environment=conda run

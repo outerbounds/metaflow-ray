@@ -26,7 +26,7 @@ COMMON_PKGS = {
 }
 
 
-class CoreweaveRayTorchMultinodeGPU(FlowSpec):
+class RayTorchMultinodeGPU(FlowSpec):
     epoch_size = 1024
     test_size = 256
     num_samples = 20
@@ -91,4 +91,4 @@ class CoreweaveRayTorchMultinodeGPU(FlowSpec):
 
 
 if __name__ == "__main__":
-    CoreweaveRayTorchMultinodeGPU()
+    RayTorchMultinodeGPU()

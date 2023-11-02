@@ -56,5 +56,14 @@ def train(self):
 Check out the [examples](/examples) directory for sample Metaflow flows that demonstrate how to use the `metaflow-ray`extension 
 with various Ray applications.
 
+| Directory | Description |
+| :--- | ---: |
+| [Hello!](examples/hello/README.md) | Run a Ray program in Python, then do it inside a Metaflow task! |  
+| [Train XGBoost](examples/train/README.md) | Use [Ray Train](https://docs.ray.io/en/latest/train/train.html) to build XGBoost models on one or more nodes, including CPU and GPU examples. |  
+| [Tune PyTorch](examples/tune/README.md) | Use [Ray Tune](https://docs.ray.io/en/latest/tune/tune.html) to build PyTorch models on one or more nodes, including CPU and GPU examples. |  
+| [End-to-end Batch Workflow](examples/e2e-batch/README.md) | Train models, evaluate them, and serve them. See how to use Metaflow workflows and various Ray abstractions together in a complete workflow. |
+| [PyTorch Lightning](examples/ray-lightning-tune/README.md) | Get started run a PyTorch Lightning job on the Ray cluster formed in a `@metaflow_ray` step. |
+| [GPT-J Fine Tuning](examples/ray-fine-tuning-gpt-j/README.md) | Fine tune the 6B parameter GPT-J model on a Ray cluster. |
+
 ### License
 `metaflow-ray` is distributed under the <u>Apache License</u>.
