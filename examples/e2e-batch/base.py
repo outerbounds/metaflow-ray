@@ -162,8 +162,7 @@ class TabularBatchPrediction(LearningTask):
         _trainer_args = dict(
             run_config=RunConfig(),
             scaling_config=ScalingConfig(
-                num_workers=self.n_nodes,
-                use_gpu=self.n_gpu > 0
+                num_workers=self.n_nodes, use_gpu=self.n_gpu > 0
             ),
             label_column="target",
             params=dict(

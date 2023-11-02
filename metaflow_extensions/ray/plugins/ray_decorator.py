@@ -184,7 +184,7 @@ def setup_ray_distributed(
 
     def _num_nodes_started(path=RAY_NODE_STARTED_VAR):
         objs = s3.get_recursive([path])
-        num_started = 0 
+        num_started = 0
         for obj in objs:
             obj = json.loads(obj.text)
             if obj["node_started"]:

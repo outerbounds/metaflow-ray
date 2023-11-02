@@ -56,8 +56,7 @@ class RayTorchMultinodeCPU(FlowSpec):
             "lr": ray.tune.sample_from(lambda spec: 10 ** (-10 * np.random.rand())),
             "momentum": ray.tune.uniform(0.1, 0.9),
             "scaling_config": ScalingConfig(
-                num_workers=self.num_workers,
-                resources_per_worker={"CPU": self.n_cpu}
+                num_workers=self.num_workers, resources_per_worker={"CPU": self.n_cpu}
             ),
         }
 

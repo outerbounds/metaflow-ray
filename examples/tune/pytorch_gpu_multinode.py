@@ -62,7 +62,7 @@ class CoreweaveRayTorchMultinodeGPU(FlowSpec):
             "scaling_config": ScalingConfig(
                 use_gpu=self.n_gpu > 0,
                 num_workers=self.num_workers,
-                resources_per_worker={"CPU": self.n_cpu, "GPU": self.n_gpu}
+                resources_per_worker={"CPU": self.n_cpu, "GPU": self.n_gpu},
             ),
         }
 

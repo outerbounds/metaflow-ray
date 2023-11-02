@@ -46,9 +46,7 @@ class Tune(FlowSpec, TabularBatchPrediction):
 
         # https://docs.ray.io/en/latest/tune/api/doc/ray.tune.Tuner.html#ray.tune.Tuner
         param_space = {
-            "scaling_config": ScalingConfig(
-                num_workers=1
-            ),
+            "scaling_config": ScalingConfig(num_workers=1),
             "params": {
                 "objective": "binary:logistic",
                 "tree_method": "approx",

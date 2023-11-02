@@ -46,7 +46,7 @@ class RayTorchGPU(FlowSpec):
             "momentum": ray.tune.uniform(0.1, 0.9),
             "scaling_config": ScalingConfig(
                 use_gpu=True,
-                resources_per_worker={"CPU": self.n_cpu, "GPU": self.n_gpu}
+                resources_per_worker={"CPU": self.n_cpu, "GPU": self.n_gpu},
             ),
         }
 
