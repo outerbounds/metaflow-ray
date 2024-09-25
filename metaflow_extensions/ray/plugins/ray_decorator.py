@@ -51,7 +51,7 @@ class RayParallelDecorator(ParallelDecorator):
 
         def _control_wrapper(step_func, flow, var=RAY_JOB_COMPLETE_VAR):
             watcher = NodeParticipationWatcher(
-                expected_num_nodes=current.num_nodes, polling_freq=10
+                expected_num_nodes=current.parallel.num_nodes, polling_freq=10
             )
             try:
                 step_func()
@@ -92,18 +92,15 @@ class RayParallelDecorator(ParallelDecorator):
         py_cli_path = Path(sys.executable).resolve()
         py_exec_dir = py_cli_path.parent
         ray_cli_path = py_exec_dir / "ray"
-
-        if ray_cli_path.is_file():
-            ray_cli_path = ray_cli_path.resolve()
-            setup_ray_distributed(
-                self.attributes["main_port"],
-                self.attributes["all_nodes_started_timeout"],
-                str(ray_cli_path),
-                flow,
-                ubf_context,
-            )
-        else:
-            print("'ray' executable not found in:", ray_cli_path)
+        # We don't use ray-cli path anymore because we can 
+        # directly call the module via `python -m ray.scripts.scripts`
+        setup_ray_distributed(
+            self.attributes["main_port"],
+            self.attributes["all_nodes_started_timeout"],
+            str(ray_cli_path),
+            flow,
+            ubf_context,
+        )
 
 
 def setup_ray_distributed(
@@ -125,8 +122,8 @@ def setup_ray_distributed(
         num_nodes = int(os.environ["AWS_BATCH_JOB_NUM_NODES"])
         node_index = os.environ["AWS_BATCH_JOB_NODE_INDEX"]
     else:  # kubernetes
-        num_nodes = int(os.environ["WORLD_SIZE"])
-        node_index = int(os.environ["RANK"])
+        num_nodes = current.parallel.num_nodes
+        node_index = current.parallel.node_index
         if ubf_context != UBF_CONTROL:
             node_index += 1  # artifact of kubernetes jobset in experimental Kubernetes parallel implementation. TBD.
     node_key = os.path.join(RAY_NODE_STARTED_VAR, "node_%s.json" % node_index)
@@ -142,9 +139,11 @@ def setup_ray_distributed(
         if "AWS_BATCH_JOB_ID" in os.environ:
             main_ip = os.environ["AWS_BATCH_JOB_MAIN_NODE_PRIVATE_IPV4_ADDRESS"]
         else:
-            main_hostname = os.environ["MASTER_ADDR"]
+            main_hostname = current.parallel.main_ip
             main_ip = socket.gethostbyname(main_hostname)
 
+    # Todo: Figure if the port thing will work as expected for the 
+    # kubernetes stuff. 
     try:
         main_port = main_port or (6379 + abs(int(current.run_id)) % 1000)
     except:
@@ -155,27 +154,32 @@ def setup_ray_distributed(
     if ubf_context == UBF_CONTROL:
         runtime_start_result = subprocess.run(
             [
-                ray_cli_path,
+                sys.executable,
+                "-m",
+                "ray.scripts.scripts",
                 "start",
                 "--head",
                 "--node-ip-address",
                 main_ip,
                 "--port",
                 str(main_port),
-            ]
+            ],
+
         )
         s3.put("control", json.dumps({RAY_JOB_COMPLETE_VAR: False}))
     else:
         node_ip_address = ray._private.services.get_node_ip_address()
         runtime_start_result = subprocess.run(
             [
-                ray_cli_path,
+                sys.executable,
+                "-m",
+                "ray.scripts.scripts",
                 "start",
                 "--node-ip-address",
                 node_ip_address,
                 "--address",
                 "%s:%s" % (main_ip, main_port),
-            ]
+            ],
         )
     if runtime_start_result.returncode != 0:
         raise RayWorkerFailedStartException(node_index)
@@ -207,7 +211,7 @@ def setup_ray_distributed(
 def ensure_ray_installed():
     while True:
         try:
-            import ray
+            import ray   
 
             break
         except ImportError:
