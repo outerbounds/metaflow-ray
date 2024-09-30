@@ -24,7 +24,7 @@ COMMON_PKGS = {
     "matplotlib": "3.7.2",
     "pyarrow": "13.0.0",
 }
-
+# TODO [NEEDS UPGRADE] : Change this code to support the lastest version of the @metaflow_ray decorator
 
 class RayTorchMultinodeGPU(FlowSpec):
     epoch_size = 1024

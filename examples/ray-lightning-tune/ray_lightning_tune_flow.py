@@ -28,7 +28,7 @@ COMMON_PKGS = {
     "pyarrow": "13.0.0",
     "tensorboard": "2.14.0",
 }
-
+# TODO [NEEDS UPGRADE] : Change this code to support the lastest version of the @metaflow_ray decorator
 
 class RayLightningTuneFlow(FlowSpec):
     # default_config = IncludeFile(name="config", default="config.json", help="config file")

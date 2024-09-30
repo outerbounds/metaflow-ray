@@ -20,6 +20,8 @@ from consts import *
 
 logging.basicConfig(level=logging.INFO, stream=sys.stdout)
 
+# TODO [NEEDS UPGRADE] : Change this code to support the lastest version of the @metaflow_ray decorator
+
 try:
     from dotenv import load_dotenv
 
@@ -147,7 +149,7 @@ class RayDeepspeedFlow(FlowSpec):
                 },
                 scaling_config=ScalingConfig(
                     num_workers=self.num_workers,
-                    use_gpu=self.use_gpu
+                    use_gpu=self.use_gpu,
                     # resources_per_worker={"GPU": N_GPU, "CPU": int(N_CPU)-1}
                 ),
                 datasets={

@@ -1,6 +1,6 @@
-from metaflow import FlowSpec, step, metaflow_ray, current, kubernetes, pypi
+from metaflow import FlowSpec, step, metaflow_ray, current, kubernetes, pypi, Parameter
 
-NUM_NODES = 22
+NUM_NODES = 10
 N_CPU = 8
 MEMORY = 12228
 COMMON_PKGS = {
@@ -14,6 +14,11 @@ COMMON_PKGS = {
 
 
 class RayRemoteExample(FlowSpec):
+
+    max_time_to_run = Parameter(
+        "max-time-to-run", help="Max time to run the flow", default=60 * 6, type=int
+    )
+
     def _do_ray_job(self):
         import ray
         import time
@@ -30,7 +35,9 @@ class RayRemoteExample(FlowSpec):
 
         from dataframe_process import do_something
 
-        do_something(num_chunks=NUM_NODES)
+        start_time = time.time()
+        while time.time() - start_time < self.max_time_to_run:
+            do_something(num_chunks=NUM_NODES)
 
     @step
     def start(self):

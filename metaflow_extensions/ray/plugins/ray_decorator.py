@@ -23,7 +23,6 @@ from .ray_utils import (
     start_ray_processes,
     warning_message,
     wait_for_ray_nodes_to_join,
-    warning_message,
 )
 
 
@@ -32,17 +31,17 @@ def _worker_node_heartbeat_monitor(
 ):
     """
     The worker tasks will poll for the control task's heartbeat and do nothing else.
-    Any failure in the worker's entry-point script will result in the failure at the control task level.
-    This is because we ensure that before user code starts execution, that all nodes are available and
-    the ray cluster is up and running.
+    Any failure in the worker's entry-point script will result in the failure at the control task level because the worker won't join the cluster.
+    We ensure that that all nodes are available before user code starts execution.
 
-    The only way a worker will end up failing will be :
-        - The control task fails (Which can happen the worker's entry-point script fails, resulting in the control task failing.)
-        - if the duration of the last heartbeat crosses the `heartbeat_timeout`
+    Since we are not letting the user code execute in the worker node, We only need to ensure that control task is properly running
+    since it holds the user code that will execute in the ray cluster.
 
-    TODO : We need to figure what happens when the datastore borks out and the
-    worker is unable to read the heartbeat from the datastore OR the worker fails because of the
-    datastore being unavailable.
+    Since the decorator is only adding functionality on top of the compute orchestration decorators like k8s, batch etc, The "failure" of any
+    container will be managed by the higher level compute orchestrator; Failure modes that are possible:
+    - User code in control task fails
+    - Control task fails intermittently.
+    - The worker/control fails intermittently such as node being wiped off
     """
     # TODO : Make heartbeat timeout configurable
     _status_notifier = TaskStatusNotifier(datastore)
@@ -70,7 +69,7 @@ class RayDecorator(ParallelDecorator):
     name = "metaflow_ray"
     defaults = {
         "main_port": None,
-        "worker_polling_freq": 10,
+        "worker_polling_freq": 10,  # We DONT use this anymore
         "all_nodes_started_timeout": 90,
     }
     IS_PARALLEL = True

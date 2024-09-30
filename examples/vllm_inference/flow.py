@@ -79,7 +79,7 @@ class TestLLM(FlowSpec):
         # we set enforce_eager so that we don't waste time in the cuda graph calculation.
         llm = LLM(
             model=current.model.loaded["llama_model"],
-            tensor_parallel_size=16,
+            tensor_parallel_size=8,
             enforce_eager=True,
         )
 
