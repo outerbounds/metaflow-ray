@@ -35,7 +35,7 @@ def start(self):
     self.next(self.train, num_parallel=NUM_NODES)
 
 @metaflow_ray
-@batch(**RESOURCES)
+@batch(**RESOURCES) # You can even set @kubernetes 
 @step
 def train(self):
     # Your step's training code here
@@ -44,7 +44,7 @@ def train(self):
 3. Initialize Ray within Your Step
 ```python
 @metaflow_ray
-@batch(**RESOURCES)
+@batch(**RESOURCES) # You can even set @kubernetes 
 @step
 def train(self):
     import ray
