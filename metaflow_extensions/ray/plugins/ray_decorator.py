@@ -184,7 +184,7 @@ class RayDecorator(ParallelDecorator):
                 step_func()
                 status_notifier.finished(0)
             finally:
-                print(
+                warning_message(
                     "Stopping heartbeat thread for control task. Control task has finished."
                 )
                 heartbeat_thread.stop()
