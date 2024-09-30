@@ -151,7 +151,7 @@ class RayDecorator(ParallelDecorator):
                 overwrite=True,
             )
         task_sync_barrier(
-            barrier_name="[node-index=%s][all_nodes_started_barrier]"
+            barrier_name="@metaflow_ray(node-index=%s)"
             % str(current.parallel.node_index),
             datastore=self.deco_datastore,
             keys=[_control_key] + _worker_keys,
