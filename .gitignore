@@ -1,2 +1,4 @@
 /metaflow_ray.egg-info/
 /venv/
+__pycache__/
+.metaflow/

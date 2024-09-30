@@ -22,7 +22,7 @@ COMMON_PKGS = {
     "pyarrow": "13.0.0",
     "matplotlib": "3.7.3",
 }
-
+# TODO [NEEDS UPGRADE] : Change this code to support the lastest version of the @metaflow_ray decorator
 
 class RayXGBoostMultinodeGPU(FlowSpec):
     n_files = 1500

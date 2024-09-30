@@ -1,6 +1,6 @@
 from setuptools import setup, find_namespace_packages
 
-version = "0.0.4"
+version = "0.1.0"
 
 setup(
     name="metaflow-ray",

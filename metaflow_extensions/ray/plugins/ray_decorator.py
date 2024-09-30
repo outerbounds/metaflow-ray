@@ -1,294 +1,250 @@
 import os
 import sys
-import time
+from functools import partial
 import json
-import signal
-import subprocess
-from pathlib import Path
-from threading import Thread
-from metaflow.exception import MetaflowException
 from metaflow.unbounded_foreach import UBF_CONTROL
 from metaflow.plugins.parallel_decorator import (
     ParallelDecorator,
     _local_multinode_control_task_step_func,
 )
+from metaflow.metaflow_current import current
+from .status_notifier import (
+    TaskStatusNotifier,
+    HeartbeatThread,
+    HeartbeatTimeoutException,
+    TaskFailedException,
+    wait_for_task_completion,
+)
+from .exceptions import ControlNodeHostNotReachableException, RayException
+from .datastore import task_sync_barrier, DecoratorDatastore
+from .ray_utils import (
+    ensure_ray_installed,
+    resolve_main_ip,
+    start_ray_processes,
+    warning_message,
+    wait_for_ray_nodes_to_join,
+)
 
-RAY_CHECKPOINT_VAR_NAME = "checkpoint_path"
-RAY_JOB_COMPLETE_VAR = "ray_job_completed"
-RAY_NODE_STARTED_VAR = "node_started"
-CONTROL_TASK_S3_ID = "control"
+
+def _worker_node_heartbeat_monitor(
+    datastore: DecoratorDatastore, node_index: int, heartbeat_timeout=60 * 10
+):
+    """
+    The worker tasks will poll for the control task's heartbeat and do nothing else.
+    Any failure in the worker's entry-point script will result in the failure at the control task level because the worker won't join the cluster.
+    We ensure that that all nodes are available before user code starts execution.
+
+    Since we are not letting the user code execute in the worker node, We only need to ensure that control task is properly running
+    since it holds the user code that will execute in the ray cluster.
+
+    Since the decorator is only adding functionality on top of the compute orchestration decorators like k8s, batch etc, The "failure" of any
+    container will be managed by the higher level compute orchestrator; Failure modes that are possible:
+    - User code in control task fails
+    - Control task fails intermittently.
+    - The worker/control fails intermittently such as node being wiped off
+    """
+    # TODO : Make heartbeat timeout configurable
+    _status_notifier = TaskStatusNotifier(datastore)
+    # Worker task statuses are only for bookkeeping.
+    # They are not used by the control task in any way.
+    _status_notifier.running(node_index)
+    try:
+        # Poll the control task's heartbeat and fail if control task fails
+        # or if the heartbeat interval crosses the threshold.
+        wait_for_task_completion(
+            _status_notifier, node_index=0, heartbeat_timeout=heartbeat_timeout
+        )
+        _status_notifier.finished(node_index)
+    except HeartbeatTimeoutException:
+        _status_notifier.failed(node_index)
+        raise RayException(
+            f"Control task heartbeat timed out. Control task has not published a heartbeat for {heartbeat_timeout} seconds."
+        )
+    except TaskFailedException:
+        _status_notifier.failed(node_index)
+        raise RayException("Control task reported failure.")
 
 
-class RayParallelDecorator(ParallelDecorator):
+class RayDecorator(ParallelDecorator):
     name = "metaflow_ray"
     defaults = {
         "main_port": None,
-        "worker_polling_freq": 10,
+        "worker_polling_freq": 10,  # We DONT use this anymore
         "all_nodes_started_timeout": 90,
     }
     IS_PARALLEL = True
 
+    def step_init(
+        self, flow, graph, step_name, decorators, environment, flow_datastore, logger
+    ):
+        super().step_init(
+            flow, graph, step_name, decorators, environment, flow_datastore, logger
+        )
+        self.flow_datastore = flow_datastore
+        self._heartbeat_thread = None
+
+    def task_pre_step(
+        self,
+        step_name,
+        task_datastore,
+        metadata,
+        run_id,
+        task_id,
+        flow,
+        graph,
+        retry_count,
+        max_user_code_retries,
+        ubf_context,
+        inputs,
+    ):
+        super().task_pre_step(
+            step_name,
+            task_datastore,
+            metadata,
+            run_id,
+            task_id,
+            flow,
+            graph,
+            retry_count,
+            max_user_code_retries,
+            ubf_context,
+            inputs,
+        )
+        ensure_ray_installed()
+        self.ubf_context = ubf_context
+        self.deco_datastore = DecoratorDatastore(
+            self.flow_datastore,
+            "%s/%s/%s/%s" % (flow.name, run_id, step_name, task_id),
+            retry_count,
+        )
+
+    def _resolve_port(self):
+        main_port = self.attributes["main_port"]
+        if main_port is None:
+            return 6379
+
+    def task_exception(
+        self, exception, step_name, flow, graph, retry_count, max_user_code_retries
+    ):
+
+        # Since worker tasks are all monitoring the control task's heartbeat,
+        # any exception in the control task will result in the worker tasks failing.
+        if self.ubf_context == UBF_CONTROL:
+            if self._heartbeat_thread is not None:
+                self._heartbeat_thread.stop()
+                self._heartbeat_thread.task_status_notifier.failed(0)
+
+    def wait_for_all_nodes_to_start(self):
+        _control_key = "control_started.json"
+        _worker_keys = [
+            f"node_{i}_started.json" for i in range(1, current.parallel.num_nodes)
+        ]
+        max_wait_time = self.attributes["all_nodes_started_timeout"] or 300  #
+        if self.ubf_context == UBF_CONTROL:
+            self.deco_datastore.put(
+                _control_key, json.dumps({"started": True}), overwrite=True
+            )
+        else:
+            self.deco_datastore.put(
+                f"node_{current.parallel.node_index}_started.json",
+                json.dumps({"started": True}),
+                overwrite=True,
+            )
+        task_sync_barrier(
+            barrier_name="@metaflow_ray(node-index=%s)"
+            % str(current.parallel.node_index),
+            datastore=self.deco_datastore,
+            keys=[_control_key] + _worker_keys,
+            max_wait_time=max_wait_time,
+            description=(
+                "Job crashed because all workers didnot end up starting in %s seconds."
+                "Increase the `all_nodes_started_timeout` in @metaflow_ray decorator to wait for longer."
+                % max_wait_time
+            ),
+            wait_message="Waiting for all workers to start up",
+        )
+
     def task_decorate(
         self, step_func, flow, graph, retry_count, max_user_code_retries, ubf_context
     ):
-        from functools import partial
-        from metaflow import S3, current
-        from metaflow.metaflow_config import DATATOOLS_S3ROOT
+        local_mode_control_task = (
+            ubf_context == UBF_CONTROL
+            and os.environ.get("METAFLOW_RUNTIME_ENVIRONMENT", "local") == "local"
+        )
 
-        if not os.environ.get("METAFLOW_RUNTIME_ENVIRONMENT", "local") == "local":
-            s3 = S3(run=flow)
-
-        def _empty_worker_task():
-            pass  # local case
-
-        def _worker_heartbeat(
-            polling_freq=self.attributes["worker_polling_freq"],
-            var=RAY_JOB_COMPLETE_VAR,
+        def control_task_function(
+            status_notifier: TaskStatusNotifier, heartbeat_thread: HeartbeatThread
         ):
-            while not json.loads(s3.get(CONTROL_TASK_S3_ID).blob)[var]:
-                time.sleep(polling_freq)
-            # TODO: wrap this with any decorators applied to step function.
-
-        def _control_wrapper(step_func, flow, var=RAY_JOB_COMPLETE_VAR):
-            watcher = NodeParticipationWatcher(
-                expected_num_nodes=current.num_nodes, polling_freq=10
-            )
+            # The control task will start a heartbeat thread that will publish heartbeats
+            # These heartbeats will be monitored by the worker tasks.
+            status_notifier.running(0)
+            self.setup_distributed_env(flow)
+            heartbeat_thread.start()
             try:
                 step_func()
-            except Exception as e:
-                raise ControlTaskException(e)
+                status_notifier.finished(0)
             finally:
-                watcher.end()
-            s3.put(CONTROL_TASK_S3_ID, json.dumps({var: True}))
-
-        ensure_ray_installed()
-
-        if os.environ.get("METAFLOW_RUNTIME_ENVIRONMENT", "local") == "local":
-            checkpoint_path = os.path.join(os.getcwd(), "ray_checkpoints")
-        else:
-            checkpoint_path = os.path.join(
-                DATATOOLS_S3ROOT, current.flow_name, current.run_id, "ray_checkpoints"
-            )
-        setattr(flow, RAY_CHECKPOINT_VAR_NAME, checkpoint_path)
-
-        if os.environ.get("METAFLOW_RUNTIME_ENVIRONMENT", "local") == "local":
-            if ubf_context == UBF_CONTROL:
-                env_to_use = getattr(self.environment, "base_env", self.environment)
-                return partial(
-                    _local_multinode_control_task_step_func,
-                    flow,
-                    env_to_use,
-                    step_func,
-                    retry_count,
+                warning_message(
+                    "Stopping heartbeat thread for control task. Control task has finished."
                 )
-            return partial(_empty_worker_task)
-        else:
-            self.setup_distributed_env(flow, ubf_context)
-            if ubf_context == UBF_CONTROL:
-                return partial(_control_wrapper, step_func=step_func, flow=flow)
-            return partial(_worker_heartbeat)
+                heartbeat_thread.stop()
 
-    def setup_distributed_env(self, flow, ubf_context):
-        py_cli_path = Path(sys.executable).resolve()
-        py_exec_dir = py_cli_path.parent
-        ray_cli_path = py_exec_dir / "ray"
+        def worker_task_function():
+            # We first call self.setup_distributed_env so that all worker
+            # nodes have the ray processes started and there is a barrier
+            # that will ensure that user code execution will only start when
+            # all nodes have started. This ensures that user code will have
+            # access to a ray cluster with expected number of nodes.
+            self.setup_distributed_env(flow)
+            # The worker tasks will wait for the control task's heartbeat.
+            # if it reaches a point where the control task failed for some reason
+            # or the control task stopped publishing heartbeats, the worker task will fail.
+            _worker_node_heartbeat_monitor(
+                self.deco_datastore,
+                current.parallel.node_index,
+                heartbeat_timeout=10 * 60,  # 10 minutes (todo: make this configurable)
+            )
 
-        if ray_cli_path.is_file():
-            ray_cli_path = ray_cli_path.resolve()
-            setup_ray_distributed(
-                self.attributes["main_port"],
-                self.attributes["all_nodes_started_timeout"],
-                str(ray_cli_path),
+        # A status notifier helps the control node publish heartbeats
+        # and it helps the worker nodes monitor the control node's heartbeat.
+        _status_notifier = TaskStatusNotifier(self.deco_datastore)
+        # We only start the heartbeat "creation" thread for the control task.
+        # This thread will publish heartbeats to the datastore from the control
+        # task.
+        self._heartbeat_thread = HeartbeatThread(
+            _status_notifier, current.parallel.node_index, 5
+        )
+        __control_task_func = partial(
+            control_task_function, _status_notifier, self._heartbeat_thread
+        )
+        if local_mode_control_task:
+            # If it is a local mode control task then we need
+            # to ensure we follow the same pattern as the parent decorator
+            env_to_use = getattr(self.environment, "base_env", self.environment)
+            return partial(
+                _local_multinode_control_task_step_func,
                 flow,
-                ubf_context,
+                env_to_use,
+                __control_task_func,
+                retry_count,
+                ",".join(self.input_paths),  # self.input_paths set in parent class.
             )
+        elif ubf_context == UBF_CONTROL:
+            return __control_task_func
         else:
-            print("'ray' executable not found in:", ray_cli_path)
+            return worker_task_function
 
-
-def setup_ray_distributed(
-    main_port, all_nodes_started_timeout, ray_cli_path, run, ubf_context
-):
-    import ray
-    import json
-    import socket
-    from metaflow import S3, current
-
-    # Why are deco.task_pre_step and deco.task_decorate calls in the same loop?
-    # https://github.com/Netflix/metaflow/blob/76eee802cba1983dffe7e7731dd8e31e2992e59b/metaflow/task.py#L553
-    # The way this runs now causes these current.parallel variables to be defaults on all nodes,
-    # since AWS Batch decorator task_pre_step hasn't run prior to the above task_decorate call.
-    # num_nodes = current.parallel.num_nodes
-    # node_index = current.parallel.node_index
-
-    if "AWS_BATCH_JOB_ID" in os.environ:
-        num_nodes = int(os.environ["AWS_BATCH_JOB_NUM_NODES"])
-        node_index = os.environ["AWS_BATCH_JOB_NODE_INDEX"]
-    else:  # kubernetes
-        num_nodes = int(os.environ["WORLD_SIZE"])
-        node_index = int(os.environ["RANK"])
-        if ubf_context != UBF_CONTROL:
-            node_index += 1  # artifact of kubernetes jobset in experimental Kubernetes parallel implementation. TBD.
-    node_key = os.path.join(RAY_NODE_STARTED_VAR, "node_%s.json" % node_index)
-    current._update_env({"num_nodes": num_nodes})
-
-    # Similar to above comment,
-    # better to use current.parallel.main_ip instead of this conditional block,
-    # but this seems to require a change to the main loop in metaflow.task.
-    if ubf_context == UBF_CONTROL:
-        local_ips = socket.gethostbyname_ex(socket.gethostname())[-1]
-        main_ip = local_ips[0]
-    else:
-        if "AWS_BATCH_JOB_ID" in os.environ:
-            main_ip = os.environ["AWS_BATCH_JOB_MAIN_NODE_PRIVATE_IPV4_ADDRESS"]
-        else:
-            main_hostname = os.environ["MASTER_ADDR"]
-            main_ip = socket.gethostbyname(main_hostname)
-
-    try:
-        main_port = main_port or (6379 + abs(int(current.run_id)) % 1000)
-    except:
-        main_port = 6379
-
-    s3 = S3(run=run)
-
-    if ubf_context == UBF_CONTROL:
-        runtime_start_result = subprocess.run(
-            [
-                ray_cli_path,
-                "start",
-                "--head",
-                "--node-ip-address",
-                main_ip,
-                "--port",
-                str(main_port),
-            ]
+    def setup_distributed_env(self, flow):
+        """
+        This function will setup the same Ray environment for all tasks (control and worker):
+        - Wait for tasks to have started.
+        - start the subsequent ray processes.
+        - Wait for all ray nodes to join the cluster (on both worker and control.)
+        """
+        self.wait_for_all_nodes_to_start()
+        main_port = self._resolve_port()
+        main_ip = resolve_main_ip()
+        start_ray_processes(
+            self.ubf_context, main_ip, main_port, current.parallel.node_index
         )
-        s3.put("control", json.dumps({RAY_JOB_COMPLETE_VAR: False}))
-    else:
-        node_ip_address = ray._private.services.get_node_ip_address()
-        runtime_start_result = subprocess.run(
-            [
-                ray_cli_path,
-                "start",
-                "--node-ip-address",
-                node_ip_address,
-                "--address",
-                "%s:%s" % (main_ip, main_port),
-            ]
-        )
-    if runtime_start_result.returncode != 0:
-        raise RayWorkerFailedStartException(node_index)
-    else:
-        s3.put(node_key, json.dumps({"node_started": True}))
-
-    def _num_nodes_started(path=RAY_NODE_STARTED_VAR):
-        objs = s3.get_recursive([path])
-        num_started = 0
-        for obj in objs:
-            obj = json.loads(obj.text)
-            if obj["node_started"]:
-                num_started += 1
-            else:
-                raise RayWorkerFailedStartException(node_index)
-        return num_started
-
-    # poll until all workers have joined the cluster
-    if ubf_context == UBF_CONTROL:
-        t0 = time.time()
-        while _num_nodes_started() < num_nodes:
-            if all_nodes_started_timeout <= time.time() - t0:
-                raise AllNodesStartupTimeoutException()
-            time.sleep(10)
-
-    s3.close()
-
-
-def ensure_ray_installed():
-    while True:
-        try:
-            import ray
-
-            break
-        except ImportError:
-            print("Ray is not installed. Installing latest version of ray-air package.")
-            subprocess.run(
-                [sys.executable, "-m", "pip", "install", "-U", "ray[air]"], check=True
-            )
-
-
-class NodeParticipationWatcher(object):
-    def __init__(
-        self, expected_num_nodes, polling_freq=10, t_user_code_start_buffer=30
-    ):
-        self.t_user_code_start_buffer = t_user_code_start_buffer
-        self.expected_num_nodes = expected_num_nodes
-        self.polling_freq = polling_freq
-        self._thread = Thread(target=self._enforce_participation)
-        self.is_alive = True
-        self._thread.start()
-
-    def end(self):
-        self.is_alive = False
-
-    def _enforce_participation(self):
-        import ray
-
-        # Why this sleep?
-        time.sleep(self.t_user_code_start_buffer)
-        # The user code is expected to run ray.init(), in line with ergonomic Ray workflows.
-        # To run self._num_nodes_started() in following loop, ray.init() needs to already run.
-        # If we don't wait for user code to run ray.init(),
-        # then we need to do it before this loop,
-        # which causes the user code ray.init() to throw error like:
-        # `Maybe you called ray.init twice by accident?`
-        # and will ask user to put 'ignore_reinit_error=True' in 'ray.init()', which is annoying UX.
-        # So we wait for user code to run ray.init() before we run self._num_nodes_started() in following loop.
-
-        while self.is_alive:
-            n = self._num_nodes(ray)
-            if n < self.expected_num_nodes:
-                self.is_alive = False
-                self._kill_run(n)
-            time.sleep(self.polling_freq)
-
-    def _num_nodes(self, ray):
-        return len(
-            ray._private.state.state._live_node_ids()
-        )  # Should this use ray._private.state.node_ids()?
-
-    def _kill_run(self, n):
-        msg = "{} nodes participating. Expected {} nodes to participate.".format(
-            n, self.expected_num_nodes
-        )
-        print(msg)
-        os.kill(os.getpid(), signal.SIGINT)
-
-
-class ControlTaskException(MetaflowException):
-    headline = "Contral task error"
-
-    def __init__(self, e):
-        msg = """
-Spinning down all workers because of the following exception running the @step code on the control task:
-    {exception_str}
-        """.format(
-            exception_str=str(e)
-        )
-        super(ControlTaskException, self).__init__(msg)
-
-
-class RayWorkerFailedStartException(MetaflowException):
-    headline = "Worker task startup error"
-
-    def __init__(self, node_index):
-        msg = "Worker task failed to start on node {}".format(node_index)
-        super(RayWorkerFailedStartException, self).__init__(msg)
-
-
-class AllNodesStartupTimeoutException(MetaflowException):
-    headline = "All workers did not join cluster error"
-
-    def __init__(self):
-        msg = "Exiting job due to time out waiting for all workers to join cluster. You can set the timeout in @metaflow_ray(all_nodes_started_timeout=X)"
-        super(AllNodesStartupTimeoutException, self).__init__(msg)
+        wait_for_ray_nodes_to_join(self.attributes["all_nodes_started_timeout"] or 300)

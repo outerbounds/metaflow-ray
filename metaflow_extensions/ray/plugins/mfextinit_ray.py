@@ -1,1 +1,1 @@
-STEP_DECORATORS_DESC = [("metaflow_ray", ".ray_decorator.RayParallelDecorator")]
+STEP_DECORATORS_DESC = [("metaflow_ray", ".ray_decorator.RayDecorator")]
