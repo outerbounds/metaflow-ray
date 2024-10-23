@@ -13,6 +13,7 @@ setup(
     author="Riley Hun",
     long_description=get_long_description(),
     author_email="riley.hun@autodesk.com",
+    long_description_content_type="text/markdown",
     packages=find_namespace_packages(include=["metaflow_extensions.*"]),
     py_modules=[
         "metaflow_extensions",
