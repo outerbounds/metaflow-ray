@@ -26,11 +26,11 @@ def resolve_main_ip():
         raise ControlNodeHostNotReachableException
 
 
-def ensure_ray_installed():
+def ensure_ray_installed(step_name):
     try:
         import ray
     except ImportError:
-        raise RayNotInstalledException
+        raise RayNotInstalledException(step_name)
 
 
 def warning_message(message, prefix="[@metaflow_ray]"):
