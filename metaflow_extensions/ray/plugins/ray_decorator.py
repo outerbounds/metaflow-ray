@@ -25,7 +25,6 @@ from .ray_utils import (
     wait_for_ray_nodes_to_join,
 )
 
-
 def _worker_node_heartbeat_monitor(
     datastore: DecoratorDatastore, node_index: int, heartbeat_timeout=60 * 10
 ):
@@ -82,7 +81,7 @@ class RayDecorator(ParallelDecorator):
         )
         self.flow_datastore = flow_datastore
         self._heartbeat_thread = None
-
+    
     def task_pre_step(
         self,
         step_name,
@@ -110,8 +109,8 @@ class RayDecorator(ParallelDecorator):
             ubf_context,
             inputs,
         )
-        ensure_ray_installed()
         self.ubf_context = ubf_context
+        ensure_ray_installed(step_name)
         self.deco_datastore = DecoratorDatastore(
             self.flow_datastore,
             "%s/%s/%s/%s" % (flow.name, run_id, step_name, task_id),
@@ -167,6 +166,7 @@ class RayDecorator(ParallelDecorator):
     def task_decorate(
         self, step_func, flow, graph, retry_count, max_user_code_retries, ubf_context
     ):
+
         local_mode_control_task = (
             ubf_context == UBF_CONTROL
             and os.environ.get("METAFLOW_RUNTIME_ENVIRONMENT", "local") == "local"

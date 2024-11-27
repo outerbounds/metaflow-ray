@@ -1,6 +1,6 @@
 from setuptools import setup, find_namespace_packages
 
-version = "0.1.0"
+version = "0.1.1"
 
 def get_long_description() -> str:
     with open("README.md") as fh:
