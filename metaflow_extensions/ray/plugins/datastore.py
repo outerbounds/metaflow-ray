@@ -143,7 +143,7 @@ def wait_for_key_data(
     datastore: DecoratorDatastore,
     keys: List[str],
     max_wait_time: float = 600,
-    frequency=0.1,
+    frequency=5,
     logger=None,
     wait_message=None,
 ) -> Dict[str, DatastoreBlob]:
@@ -179,7 +179,7 @@ def task_sync_barrier(
     datastore: DecoratorDatastore,
     keys: List[str],
     max_wait_time=600,
-    frequency=0.1,
+    frequency=5,
     description=None,
     wait_message=None,
 ):

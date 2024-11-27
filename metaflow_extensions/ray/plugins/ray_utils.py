@@ -129,9 +129,10 @@ def wait_for_ray_nodes_to_join(max_wait_time):
         if ray_nodes is not None:
             if len(ray_nodes) == current.parallel.num_nodes:
                 warning_message(
-                    "All `ray` nodes joined the cluster. Number of nodes in cluster: %s"
+                    "All ray nodes joined the cluster. Number of nodes in cluster: %s"
                     % str(len(ray_nodes))
                 )
+                time.sleep(1)
                 return ray_nodes
         if _iters % 10 == 0:
             warning_message(
