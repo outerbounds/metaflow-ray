@@ -24,6 +24,7 @@ from .ray_utils import (
     warning_message,
     wait_for_ray_nodes_to_join,
 )
+from .constants import RAY_SUFFIX
 
 def _worker_node_heartbeat_monitor(
     datastore: DecoratorDatastore, node_index: int, heartbeat_timeout=60 * 10
@@ -116,6 +117,16 @@ class RayDecorator(ParallelDecorator):
             "%s/%s/%s/%s" % (flow.name, run_id, step_name, task_id),
             retry_count,
         )
+
+        storage_root = self.deco_datastore.get_storage_root
+        if storage_root.startswith(RAY_SUFFIX):
+            from metaflow.metaflow_config import DATASTORE_SYSROOT_S3
+            
+            storage_root = os.path.join(DATASTORE_SYSROOT_S3, storage_root)
+
+        current._update_env({
+            "ray_storage_path": os.path.join(storage_root, "%s/%s/%s" % (flow.name, run_id, step_name))
+        })
 
     def _resolve_port(self):
         main_port = self.attributes["main_port"]
