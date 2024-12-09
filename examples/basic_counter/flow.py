@@ -14,6 +14,7 @@ class RayCounterFlow(FlowSpec):
         print("memory: %sGB" % (round(int(memory) / (1024 * 1024 * 1024), 2)))
 
         c = Counter.remote()
+
         for _ in range(10):
             time.sleep(1)
             c.incr.remote(1)
