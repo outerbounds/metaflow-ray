@@ -1,12 +1,10 @@
 # Introduction
-This repo has a hello world program for Ray, and one for running a Ray program inside a Metaflow task.
 
-## Hello Ray
-```python
-python hello_ray.py
-```
+The following two files introduce basic usage of the `@metaflow_ray` decorator with `@kubernetes`.
 
-## Hello Ray Metaflow
-```python
-hello_ray_metaflow.py
-```
+1. `hello_ray.py` contains an actor (class decorated with `@ray.remote`) called `Counter`
+- The usage (/user code) of this counter is present in `__main__` and can be verified by running `python hello_ray.py`
+
+2. `hello_ray_metaflow.py` shows how the usage (/user code) for this counter (after importing it from `hello_ray`) can now be moved within the `execute` step of the `HelloRayFlow`.
+- This flow can now be run with `python examples/hello/hello_ray_metaflow.py --no-pylint --environment=pypi run`
+- If you are on the [Outerbounds](https://outerbounds.com/) platform, you can leverage `fast-bakery` for blazingly fast docker image builds. This can be used by `python examples/hello/hello_ray_metaflow.py --no-pylint --environment=fast-bakery run`
