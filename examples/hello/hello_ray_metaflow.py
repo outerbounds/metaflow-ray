@@ -1,27 +1,41 @@
-from metaflow import FlowSpec, step, current
+from metaflow import FlowSpec, step, pypi, kubernetes, metaflow_ray
 
-
-class HelloRay(FlowSpec):
-    def _do_ray_job(self):
-        import ray
-
-        ray.init()
-        print("Ray initialized in the %s step." % current.step_name)
-        for k, v in ray.cluster_resources().items():
-            if "memory" in k.lower():
-                print("%s: %sGB" % (k, round(int(v) / (1024 * 1024 * 1024), 2)))
-            else:
-                print("%s: %s" % (k, v))
-
+class HelloRayFlow(FlowSpec):
     @step
     def start(self):
-        self._do_ray_job()
+        self.next(self.execute, num_parallel=2)
+
+    @kubernetes
+    @metaflow_ray
+    @pypi(packages={"ray": "2.39.0"})
+    @step
+    def execute(self):
+        import ray
+        import time
+        from hello_ray import Counter
+
+        ray.init()
+
+        memory = ray.cluster_resources().get("memory")
+        print("memory: %sGB" % (round(int(memory) / (1024 * 1024 * 1024), 2)))
+
+        c = Counter.remote()
+        for _ in range(10):
+            time.sleep(1)
+            c.incr.remote(1)
+
+        print(ray.get(c.get.remote()))
+
+        self.next(self.join)
+
+    @step
+    def join(self, inputs):
         self.next(self.end)
 
     @step
     def end(self):
-        self._do_ray_job()
+        pass
 
 
 if __name__ == "__main__":
-    HelloRay()
+    HelloRayFlow()
