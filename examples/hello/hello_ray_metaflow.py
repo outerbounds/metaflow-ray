@@ -1,6 +1,8 @@
 from metaflow import FlowSpec, step, pypi, kubernetes, metaflow_ray
 
+
 class HelloRayFlow(FlowSpec):
+
     def _do_ray_job(self):
         import ray
         import time
