@@ -1,12 +1,12 @@
 from metaflow import FlowSpec, step, pypi, kubernetes, metaflow_ray
 
 
-class HelloRayFlow(FlowSpec):
+class RayCounterFlow(FlowSpec):
 
     def _do_ray_job(self):
         import ray
         import time
-        from hello_ray import Counter
+        from counter import Counter
 
         ray.init()
 
@@ -42,4 +42,4 @@ class HelloRayFlow(FlowSpec):
 
 
 if __name__ == "__main__":
-    HelloRayFlow()
+    RayCounterFlow()
