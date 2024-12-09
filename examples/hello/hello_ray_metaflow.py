@@ -1,15 +1,7 @@
 from metaflow import FlowSpec, step, pypi, kubernetes, metaflow_ray
 
 class HelloRayFlow(FlowSpec):
-    @step
-    def start(self):
-        self.next(self.execute, num_parallel=2)
-
-    @kubernetes
-    @metaflow_ray
-    @pypi(packages={"ray": "2.39.0"})
-    @step
-    def execute(self):
+    def _do_ray_job(self):
         import ray
         import time
         from hello_ray import Counter
@@ -26,6 +18,16 @@ class HelloRayFlow(FlowSpec):
 
         print(ray.get(c.get.remote()))
 
+    @step
+    def start(self):
+        self.next(self.execute, num_parallel=2)
+
+    @kubernetes
+    @metaflow_ray
+    @pypi(packages={"ray": "2.39.0"})
+    @step
+    def execute(self):
+        self._do_ray_job()
         self.next(self.join)
 
     @step
