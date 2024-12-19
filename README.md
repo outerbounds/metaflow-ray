@@ -60,7 +60,7 @@ with various Ray applications.
 | :--- | ---: |
 | [Hello!](examples/hello/README.md) | Run a Ray program in Python, then do it inside a Metaflow task! |
 | [Process Dataframe!](examples/dataframe_process/README.md) | Process a large dataframe in chunks with Ray and Python, then do it inside a Metaflow task! |
-| [Train XGBoost](examples/train/README.md) | Use [Ray Train](https://docs.ray.io/en/latest/train/train.html) to build XGBoost models on one or more nodes, including CPU and GPU examples. |  
+| [Train XGBoost](examples/train_xgboost/README.md) | Use [Ray Train](https://docs.ray.io/en/latest/train/train.html) to build XGBoost models on multiple nodes, including CPU and GPU examples. |
 | [Tune PyTorch](examples/tune/README.md) | Use [Ray Tune](https://docs.ray.io/en/latest/tune/tune.html) to build PyTorch models on one or more nodes, including CPU and GPU examples. |  
 | [End-to-end Batch Workflow](examples/e2e-batch/README.md) | Train models, evaluate them, and serve them. See how to use Metaflow workflows and various Ray abstractions together in a complete workflow. |
 | [PyTorch Lightning](examples/ray-lightning-tune/README.md) | Get started run a PyTorch Lightning job on the Ray cluster formed in a `@metaflow_ray` step. |
