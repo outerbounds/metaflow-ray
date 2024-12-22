@@ -16,7 +16,7 @@ class RayCPUFlow(FlowSpec):
     def start(self):
         self.next(self.execute, num_parallel=2)
 
-    @kubernetes(image="registry.hub.docker.com/rayproject/ray:latest")
+    @kubernetes(image="registry.hub.docker.com/rayproject/ray:2.40.0-py311")
     @metaflow_ray
     @step
     def execute(self):

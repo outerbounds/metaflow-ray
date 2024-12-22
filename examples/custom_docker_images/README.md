@@ -4,7 +4,7 @@ The following three files showcase how to use custom images on remote execution 
 
 1. `gpu_profile.py` contains the `@gpu_profile` decorator, and is available [here](https://github.com/outerbounds/metaflow-gpu-profile). It is used in the file `flow_with_gpu_image.py`
 
-2. `flow_with_cpu_image.py` contains a flow that uses a custom image i.e. `registry.hub.docker.com/rayproject/ray:latest` with `@kubernetes`. Since this image already has `ray` installed, we don't need `@pypi(packages={"ray": "2.39.0"})`.
+2. `flow_with_cpu_image.py` contains a flow that uses a custom image i.e. `registry.hub.docker.com/rayproject/ray:latest` with `@kubernetes`. Since this image already has `ray` installed, we don't need `@pypi(packages={"ray": "2.40.0"})`.
 
 - This can be run using: `python examples/custom_docker_images/flow_with_cpu_image.py run`
 

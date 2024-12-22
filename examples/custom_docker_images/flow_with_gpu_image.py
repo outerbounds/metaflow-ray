@@ -19,7 +19,7 @@ class RayGPUFlow(FlowSpec):
 
     @gpu_profile(interval=1)
     @pypi(packages={"matplotlib": "3.9.3"})
-    @kubernetes(image="registry.hub.docker.com/rayproject/ray:latest-gpu", gpu=1, memory=12228)
+    @kubernetes(image="registry.hub.docker.com/rayproject/ray:2.40.0-py311-gpu", gpu=1, memory=12228)
     @metaflow_ray
     @step
     def execute(self):
