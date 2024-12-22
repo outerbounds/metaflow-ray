@@ -1,6 +1,8 @@
 import pandas as pd
 from transformers import AutoTokenizer
-from consts import *
+
+
+MODEL_NAME = "EleutherAI/gpt-j-6B"
 
 
 def split_text(batch: pd.DataFrame) -> pd.DataFrame:

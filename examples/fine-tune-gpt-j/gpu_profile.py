@@ -8,8 +8,6 @@ from functools import wraps
 # Card plot styles
 MEM_COLOR = "#0c64d6"
 GPU_COLOR = "#ff69b4"
-CPU_COLOR = "#7a4e7b"
-RAM_COLOR = "#01796F"
 AXES_COLOR = "#666"
 LABEL_COLOR = "#333"
 FONTSIZE = 10
@@ -24,24 +22,18 @@ CUDA_VER = re.compile(b"CUDA Version:(.*) ")
 MONITOR_FIELDS = [
     "timestamp",
     "gpu_utilization",
-    "gpu_memory_used",
-    "gpu_memory_total",
-    "cpu_utilization",
-    "ram_used",
-    "ram_total",
+    "memory_used",
+    "memory_total",
 ]
 
 MONITOR = """
 set -e;
 while kill -0 {pid} 2>/dev/null;
 do
-  gpu=$(nvidia-smi \
-    --query-gpu=pci.bus_id,timestamp,utilization.gpu,memory.used,memory.total \
-    --format=csv,noheader,nounits | sed 's/,/, /g');
-  cpu=$(top -n 1 -b | grep "Cpu(s)" | awk '{{printf("%.1f", $2+$4)}}');
-  ram=$(free -m | awk 'NR==2{{printf("%d, %d", $3, $2)}}');
-  echo "$gpu, $cpu, $ram";
-  sleep {interval};
+ nvidia-smi
+   --query-gpu=pci.bus_id,timestamp,utilization.gpu,memory.used,memory.total
+   --format=csv,noheader,nounits;
+ sleep {interval};
 done
 """.replace(
     "\n", " "
@@ -156,7 +148,7 @@ class gpu_profile:
                 if self.with_card:
                     try:
                         make_card(results, self.artifact_prefix + "data")
-                    except Exception:
+                    except:
                         pass
 
         if self.with_card:
@@ -235,47 +227,21 @@ def profile_plots(device_id, profile_data):
     gpu = list(map(float, data["gpu_utilization"]))
     mem = [
         100.0 * float(used) / float(total)
-        for used, total in zip(data["gpu_memory_used"], data["gpu_memory_total"])
+        for used, total in zip(data["memory_used"], data["memory_total"])
     ]
-    cpu = list(map(float, data["cpu_utilization"]))
-    ram = [
-        100.0 * float(used) / float(total)
-        for used, total in zip(data["ram_used"], data["ram_total"])
-    ]
-
     gpu_plot = make_plot(
-        tstamps,
-        gpu,
-        "GPU utilization",
-        "device: %s" % device_id,
-        line_color=GPU_COLOR,
-    )
-    cpu_plot = make_plot(
-        tstamps,
-        cpu,
-        "CPU utilization",
-        "device: %s" % device_id,
-        line_color=CPU_COLOR,
-    )
-    ram_plot = make_plot(
-        tstamps,
-        ram,
-        "RAM utilization",
-        "device: %s" % device_id,
-        line_color=RAM_COLOR,
-        secondary_y_factor=float(data["ram_total"][0]),
-        secondary_y_label="RAM usage in MBs",
+        tstamps, gpu, "GPU utilization", "device: %s" % device_id, line_color=GPU_COLOR
     )
     mem_plot = make_plot(
         tstamps,
         mem,
-        "GPU Memory utilization",
+        "Memory utilization",
         "device: %s" % device_id,
         line_color=MEM_COLOR,
-        secondary_y_factor=float(data["gpu_memory_total"][0]),
-        secondary_y_label="GPU Memory usage in MBs",
+        secondary_y_factor=float(data["memory_total"][0]),
+        secondary_y_label="Memory usage in MBs",
     )
-    return gpu_plot, mem_plot, cpu_plot, ram_plot
+    return gpu_plot, mem_plot
 
 
 def make_card(results, artifact_name):
@@ -306,60 +272,24 @@ def make_card(results, artifact_name):
         rows = []
         for device, data in results["profile"].items():
             max_gpu = max(map(float, data["gpu_utilization"]))
-            max_mem = max(map(float, data["gpu_memory_used"]))
-            max_cpu = max(map(float, data["cpu_utilization"]))
-            max_ram = max(map(float, data["ram_used"]))
-            rows.append(
-                [
-                    device,
-                    "%2.1f%%" % max_gpu,
-                    "%dMB" % max_mem,
-                    "%2.1f%%" % max_cpu,
-                    "%dMB" % max_ram,
-                ]
-            )
-        els.append(
-            Table(
-                rows,
-                headers=[
-                    "Device ID",
-                    "Max GPU %",
-                    "Max GPU memory",
-                    "Max CPU %",
-                    "Max RAM",
-                ],
-            )
-        )
+            max_mem = max(map(float, data["memory_used"]))
+            rows.append([device, "%2.1f%%" % max_gpu, "%dMB" % max_mem])
+        els.append(Table(rows, headers=["Device ID", "Max GPU %", "Max memory"]))
         els.append(Markdown(f"Detailed data saved in an artifact `{artifact_name}`"))
 
     def _plots():
-        first_rows, second_rows = [], []
+        rows = []
         for device in results["profile"]:
-            gpu_plot, mem_plot, cpu_plot, ram_plot = profile_plots(
-                device, results["profile"]
-            )
-            first_rows.append(
+            gpu_plot, mem_plot = profile_plots(device, results["profile"])
+            rows.append(
                 [
                     device,
                     Image.from_matplotlib(gpu_plot),
                     Image.from_matplotlib(mem_plot),
                 ]
             )
-            second_rows.append(
-                [
-                    device,
-                    Image.from_matplotlib(cpu_plot),
-                    Image.from_matplotlib(ram_plot),
-                ]
-            )
         els.append(
-            Table(
-                first_rows,
-                headers=["Device ID", "GPU Utilization", "GPU Memory usage"],
-            )
-        )
-        els.append(
-            Table(second_rows, headers=["Device ID", "CPU Utilization", "RAM usage"])
+            Table(rows, headers=["Device ID", "GPU Utilization", "Memory usage"])
         )
 
     els.append(Markdown(f"# GPU profile for `{current.pathspec}`"))
@@ -377,8 +307,8 @@ def make_card(results, artifact_name):
         else:
             try:
                 _plots()
-            except Exception as e:
-                els.append(Markdown("Couldn't create plots " + str(e)))
+            except:
+                els.append(Markdown("Couldn't create plots"))
 
     for el in els:
         current.card["gpu_profile"].append(el)

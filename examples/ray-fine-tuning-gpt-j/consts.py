@@ -1,5 +1,0 @@
-N_CPU = 8
-N_GPU = 1
-MEMORY = 60000
-QUEUE_NAME = "QUEUE_NAME"
-MODEL_NAME = "EleutherAI/gpt-j-6B"
