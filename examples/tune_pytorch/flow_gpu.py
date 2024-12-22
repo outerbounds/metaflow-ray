@@ -4,9 +4,19 @@ from metaflow import FlowSpec, Parameter, step, card, kubernetes, pypi, metaflow
 
 
 class RayTuneTorchGPU(FlowSpec):
-    batch_size = 1024
-    test_batch_size = 256
     num_samples = 20
+    batch_size = Parameter(
+        name="batch_size",
+        default=1024,
+        type=int,
+        help="batch size for training"
+    )
+    test_batch_size = Parameter(
+        name="test_batch_size",
+        default=256,
+        type=int,
+        help="batch size for testing"
+    )
     smoke_test = Parameter(
         name="smoke_test",
         default=True,
