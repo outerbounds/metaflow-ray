@@ -25,12 +25,12 @@ class ConvNet(nn.Module):
         return F.log_softmax(x, dim=1)
 
 
-def train(model, optimizer, data_loader, epoch_size=512, smoke_test=True):
+def train(model, optimizer, data_loader, batch_size=512, smoke_test=True):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.train()
     for batch_idx, (data, target) in enumerate(data_loader):
         # exit early only on a small subset of data
-        if smoke_test and batch_idx * len(data) > epoch_size:
+        if smoke_test and batch_idx * len(data) > batch_size:
             return
         data, target = data.to(device), target.to(device)
         optimizer.zero_grad()
@@ -40,7 +40,7 @@ def train(model, optimizer, data_loader, epoch_size=512, smoke_test=True):
         optimizer.step()
 
 
-def test(model, data_loader, epoch_size=256, smoke_test=True):
+def test(model, data_loader, batch_size=256, smoke_test=True):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.eval()
 
@@ -50,7 +50,7 @@ def test(model, data_loader, epoch_size=256, smoke_test=True):
     with torch.no_grad():
         for batch_idx, (data, target) in enumerate(data_loader):
             # exit early only on a small subset of data
-            if smoke_test and batch_idx * len(data) > epoch_size:
+            if smoke_test and batch_idx * len(data) > batch_size:
                 break
             data, target = data.to(device), target.to(device)
             outputs = model(data)
@@ -62,17 +62,17 @@ def test(model, data_loader, epoch_size=256, smoke_test=True):
 
 
 def train_mnist(
-    config, epoch_size, test_size, smoke_test=True, n_epochs=10
+    config, batch_size, test_batch_size, smoke_test=True, n_epochs=10
 ):
     mnist_transforms = transforms.Compose([transforms.ToTensor(),transforms.Normalize((0.1307,), (0.3081,))])
     train_loader = DataLoader(
         datasets.MNIST("./", train=True, download=True, transform=mnist_transforms),
-        batch_size=64,
+        batch_size=batch_size,
         shuffle=True,
     )
     test_loader = DataLoader(
         datasets.MNIST("./", train=False, download=True, transform=mnist_transforms),
-        batch_size=64,
+        batch_size=test_batch_size,
         shuffle=True,
     )
 
@@ -86,8 +86,8 @@ def train_mnist(
     )
 
     for i in range(n_epochs):
-        train(model, optimizer, train_loader, epoch_size, smoke_test=smoke_test)
-        acc = test(model, test_loader, test_size, smoke_test=smoke_test)
+        train(model, optimizer, train_loader, batch_size, smoke_test=smoke_test)
+        acc = test(model, test_loader, test_batch_size, smoke_test=smoke_test)
         session.report({"mean_accuracy": acc})
         if i % 5 == 0:
             torch.save(model.state_dict(), f"./model_{i}.pth")
@@ -95,8 +95,8 @@ def train_mnist(
 
 def run(
     search_space=None,
-    epoch_size=512,
-    test_size=256,
+    batch_size=512,
+    test_batch_size=256,
     num_samples=20,
     smoke_test=True,
     run_config_storage_path=None,
@@ -105,8 +105,8 @@ def run(
     tuner = tune.Tuner(
         partial(
             train_mnist,
-            epoch_size=epoch_size,
-            test_size=test_size,
+            batch_size=batch_size,
+            test_batch_size=test_batch_size,
             smoke_test=smoke_test,
             n_epochs=n_epochs,
         ),
