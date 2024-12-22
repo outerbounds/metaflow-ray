@@ -1,11 +1,17 @@
 from metaflow.cards import Image
-from metaflow import FlowSpec, step, card, kubernetes, pypi, metaflow_ray, current
+from metaflow import FlowSpec, Parameter, step, card, kubernetes, pypi, metaflow_ray, current
 
 
 class RayTuneTorchCPU(FlowSpec):
-    epoch_size = 1024
-    test_size = 256
+    batch_size = 1024
+    test_batch_size = 256
     num_samples = 20
+    smoke_test = Parameter(
+        name="smoke_test",
+        default=True,
+        type=bool,
+        help="exit early on a small subset of data"
+    )
 
     def _do_ray_job(self):
         import ray
@@ -27,10 +33,10 @@ class RayTuneTorchCPU(FlowSpec):
 
         results_list = run(
             search_space=search_space,
-            epoch_size=self.epoch_size,
-            test_size=self.test_size,
+            batch_size=self.batch_size,
+            test_batch_size=self.test_batch_size,
             num_samples=self.num_samples,
-            smoke_test=True,
+            smoke_test=self.smoke_test,
             run_config_storage_path=current.ray_storage_path,
         )
 
