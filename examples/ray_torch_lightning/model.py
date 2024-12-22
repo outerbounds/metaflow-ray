@@ -1,23 +1,26 @@
-import pytorch_lightning as pl
 import torch
+import pytorch_lightning as pl
 import torch.nn.functional as F
 from torchmetrics import Accuracy
 
 
 class MNISTClassifier(pl.LightningModule):
+
     def __init__(self, config):
-        super(MNISTClassifier, self).__init__()
-        self.accuracy = Accuracy()
+        super().__init__()
         self.layer_1_size = config["layer_1_size"]
         self.layer_2_size = config["layer_2_size"]
-        self.lr = config["lr"]
 
         # mnist images are (1, 28, 28) (channels, width, height)
         self.layer_1 = torch.nn.Linear(28 * 28, self.layer_1_size)
         self.layer_2 = torch.nn.Linear(self.layer_1_size, self.layer_2_size)
         self.layer_3 = torch.nn.Linear(self.layer_2_size, 10)
+
         self.eval_loss = []
         self.eval_accuracy = []
+
+        self.lr = config["lr"]
+        self.accuracy = Accuracy()
 
     def cross_entropy_loss(self, logits, labels):
         return F.nll_loss(logits, labels)
@@ -37,8 +40,8 @@ class MNISTClassifier(pl.LightningModule):
 
         return x
 
-    def training_step(self, train_batch, batch_idx):
-        x, y = train_batch
+    def training_step(self, batch, batch_idx):
+        x, y = batch
         logits = self.forward(x)
         loss = self.cross_entropy_loss(logits, y)
         accuracy = self.accuracy(logits, y)
@@ -47,20 +50,24 @@ class MNISTClassifier(pl.LightningModule):
         self.log("ptl/train_accuracy", accuracy)
         return loss
 
-    def validation_step(self, val_batch, batch_idx):
-        x, y = val_batch
+    def validation_step(self, batch, batch_idx):
+        x, y = batch
         logits = self.forward(x)
         loss = self.cross_entropy_loss(logits, y)
         accuracy = self.accuracy(logits, y)
+
         self.eval_loss.append(loss)
         self.eval_accuracy.append(accuracy)
+
         return {"val_loss": loss, "val_accuracy": accuracy}
 
     def on_validation_epoch_end(self):
         avg_loss = torch.stack(self.eval_loss).mean()
         avg_acc = torch.stack(self.eval_accuracy).mean()
+
         self.log("ptl/val_loss", avg_loss, sync_dist=True)
         self.log("ptl/val_accuracy", avg_acc, sync_dist=True)
+
         self.eval_loss.clear()
         self.eval_accuracy.clear()
 
