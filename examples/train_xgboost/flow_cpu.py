@@ -1,9 +1,14 @@
-from metaflow import FlowSpec, step, pypi, kubernetes, current, metaflow_ray
+from metaflow import FlowSpec, Parameter, step, pypi, kubernetes, card, current, metaflow_ray
 
 
 class RayXGBoostCPU(FlowSpec):
     n_files = 500
-    data_url = "s3://obp-475b0e-metaflow/metaflow/mf.datasets/investment_ids"
+    data_url = Parameter(
+        name="data_url",
+        type=str,
+        required=True,
+        help="link to dataset"
+    )
 
     def _do_ray_job(self):
         import ray
@@ -47,10 +52,11 @@ class RayXGBoostCPU(FlowSpec):
         self.merge_artifacts(inputs)
         self.next(self.end)
 
+    @card
     @pypi(packages={"ray[train]": "2.40.0"})
     @step
     def end(self):
-        print(self.result)
+        self.metrics_df = self.result.metrics_dataframe
 
 
 if __name__ == "__main__":
