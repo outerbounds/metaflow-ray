@@ -2,15 +2,15 @@
 
 ### Introduction
 `metaflow-ray` is an extension for Metaflow that enables seamless integration with Ray, allowing users to easily leverage 
-Ray's powerful distributed computing capabilities within their Metaflow flows. With `metaflow-ray`, you can spin up transient / ephemeral Ray clusters on AWS Batch or Kubernetes directly from your Metaflow steps using the `@metaflow_ray` decorator. This enables you to run your Ray applications that leverage Ray Core, Ray Train, Ray Tune, and Ray Data effortlessly within your Metaflow flow.
+Ray's powerful distributed computing capabilities within their Metaflow flows. With `metaflow-ray`, you can spin up ephemeral Ray clusters on AWS Batch or Kubernetes directly from your Metaflow steps using the `@metaflow_ray` decorator. This enables you to run your Ray applications that leverage Ray Core, Ray Train, Ray Tune, and Ray Data effortlessly within your Metaflow flow.
 
 ### Features
 - <b>Effortless Ray Integration:</b> This extension provides a simple and intuitive way to incorporate Ray 
 into your Metaflow workflows using the `@metaflow_ray` decorator.
-- <b>Transient Ray Clusters:</b> Let Metaflow orchestrate the creation of transient Ray clusters on top of either:
+- <b>Elastic Ephemeral Ray Clusters:</b> Let Metaflow orchestrate the creation of ephemeral Ray clusters on top of either:
     - AWS Batch multi-node parallel jobs
     - Kubernetes JobSets
-- <b>Seamless Ray Initialization:</b> The `@metaflow_ray` decorator handles the initialization of the Ray cluster for you, so you just need to focus on writing your Ray code without worrying about cluster setup
+- <b>Seamless Ray Initialization:</b> The `@metaflow_ray` decorator handles the initialization of the Ray cluster for you, so you can focus on writing your Ray code without worrying about cluster setup
 - <b>Wide Range of Applications:</b> Run a wide variety of Ray applications, including hyperparameter tuning, distributed data processing, and distributed training, etc.
 
 ### Installation
