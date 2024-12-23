@@ -82,6 +82,7 @@ with various Ray applications.
 | [PyTorch Lightning](examples/ray_torch_lightning/README.md) | Get started with running a PyTorch Lightning job on the Ray cluster formed in a `@metaflow_ray` step. |
 | [GPT-J Fine Tuning](examples/fine-tune-gpt-j/README.md) | Fine tune the 6B parameter GPT-J model on a Ray cluster. |
 | [End-to-end Batch Workflow](examples/e2e-batch/README.md) | Train models, evaluate them, and serve them. See how to use Metaflow workflows and various Ray abstractions together in a complete workflow. |
+| [vLLM Inference!](examples/vllm_inference/README.md) | Run Inference on Mistral 7B Instruct with vLLM and Ray via Metaflow. |
 
 ### License
 `metaflow-ray` is distributed under the <u>Apache License</u>.
