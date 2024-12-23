@@ -1,34 +1,35 @@
 from metaflow import (
     FlowSpec,
+    Parameter,
     step,
-    card,
     pypi,
     kubernetes,
-    parallel,
-    secrets,
+    card,
     huggingface_hub,
-    current,
     model,
-    metaflow_ray,
+    JSONType,
+    current,
+    metaflow_ray
 )
 
-DISK_SIZE = 100 * 1000  # 100 GB
 
-MEMORY = 60 * 1000  # 60 GB
+class vLLMMistralInference(FlowSpec):
+    messages = Parameter(
+        name="messages",
+        type=JSONType,
+        required=True,
+        help="messages in json format"
+    )
 
-
-class TestLLM(FlowSpec):
     @step
     def start(self):
         self.next(self.pull_model_from_huggingface)
 
     @pypi(
-        python="3.10.11",
+        python="3.10",
         packages={
-            "vllm": "0.6.1",
-            "transformers": "4.44.2",
-            "huggingface-hub": "0.25.1",
-        },
+            "huggingface-hub": "0.27.0",
+        }
     )
     @huggingface_hub
     @step
@@ -40,69 +41,51 @@ class TestLLM(FlowSpec):
         )
         self.next(self.run_vllm, num_parallel=2)
 
+    @card
     @model(
+        # this ensures that all workers have the model loaded to the same path
         load=[("llama_model", "./llama_model")]
-    )  # this ensures that all workers have the model loaded to the same path
-    @pypi(
-        python="3.10.11",
-        packages={
-            "vllm": "0.6.1",
-            "transformers": "4.44.2",
-            "huggingface-hub": "0.25.1",
-            "setuptools": "74.1.2",
-        },
     )
     @kubernetes(
         cpu=16,
         gpu=8,
-        memory=MEMORY,
+        memory=60000,
         node_selector="gpu.nvidia.com/class=A100_NVLINK_80GB",
         image="registry.hub.docker.com/valayob/gpu-base-image:0.0.9",
-        shared_memory=12 * 1000,  # 12 GB shared memory as ray requires this.
+        shared_memory=12000
     )
     @metaflow_ray(
-        all_nodes_started_timeout=20 * 60
-    )  # 20 minute timeout so that all workers start.
-    @card
+        # 20 mins timeout for all workers to join
+        all_nodes_started_timeout=1200
+    )
+    @pypi(
+        python="3.10",
+        packages={
+            "vllm": "0.6.5",
+            "transformers": "4.47.1",
+            "huggingface-hub": "0.27.0",
+        }
+    )
     @step
     def run_vllm(self):
         from vllm import LLM, SamplingParams
         from transformers import AutoTokenizer
-        import huggingface_hub
-        import os
 
-        print(
-            "loading the model from the path",
-            current.model.loaded["llama_model"],
-        )
         tokenizer = AutoTokenizer.from_pretrained(current.model.loaded["llama_model"])
-        # we set enforce_eager so that we don't waste time in the cuda graph calculation.
         llm = LLM(
             model=current.model.loaded["llama_model"],
             tensor_parallel_size=8,
             enforce_eager=True,
         )
-
-        print("running the model")
-        messages = [
-            {
-                "role": "system",
-                "content": "You are a pirate chatbot who always responds in pirate speak!",
-            },
-            {"role": "user", "content": "Who are you?"},
-        ]
-
         sampling_params = SamplingParams(temperature=0.5)
         outputs = llm.generate(
             tokenizer.apply_chat_template(
-                messages, add_generation_prompt=True, tokenize=False
+                self.messages, add_generation_prompt=True, tokenize=False
             ),
             sampling_params,
         )
-
         self.text = outputs[0].outputs[0].text.strip()
 
-        print("done with generation")
         self.next(self.join)
 
     @step
@@ -111,8 +94,8 @@ class TestLLM(FlowSpec):
 
     @step
     def end(self):
-        print("ending the flow")
+        pass
 
 
 if __name__ == "__main__":
-    TestLLM()
+    vLLMMistralInference()
