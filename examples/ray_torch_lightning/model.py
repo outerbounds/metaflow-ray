@@ -1,42 +1,39 @@
 import torch
-import pytorch_lightning as pl
+import lightning as L
+from typing import Any, Dict
 import torch.nn.functional as F
-from torchmetrics import Accuracy
+from torchmetrics.classification import Accuracy
 
 
-class MNISTClassifier(pl.LightningModule):
+class MNISTClassifier(L.LightningModule):
 
-    def __init__(self, config):
+    def __init__(self, config: Dict[str, Any]):
         super().__init__()
         self.layer_1_size = config["layer_1_size"]
         self.layer_2_size = config["layer_2_size"]
+        self.lr = config["lr"]
+
+        # save the config dict
+        self.save_hyperparameters()
 
         # mnist images are (1, 28, 28) (channels, width, height)
         self.layer_1 = torch.nn.Linear(28 * 28, self.layer_1_size)
         self.layer_2 = torch.nn.Linear(self.layer_1_size, self.layer_2_size)
         self.layer_3 = torch.nn.Linear(self.layer_2_size, 10)
 
-        self.eval_loss = []
-        self.eval_accuracy = []
-
-        self.lr = config["lr"]
-        self.accuracy = Accuracy()
+        self.train_accuracy = Accuracy(task="multiclass", num_classes=10)
+        self.val_accuracy = Accuracy(task="multiclass", num_classes=10)
 
     def cross_entropy_loss(self, logits, labels):
         return F.nll_loss(logits, labels)
 
     def forward(self, x):
-        batch_size, channels, width, height = x.size()
+        batch_size, _, _, _ = x.size()
         x = x.view(batch_size, -1)
 
-        x = self.layer_1(x)
-        x = torch.relu(x)
-
-        x = self.layer_2(x)
-        x = torch.relu(x)
-
-        x = self.layer_3(x)
-        x = torch.log_softmax(x, dim=1)
+        x = torch.relu(self.layer_1(x))
+        x = torch.relu(self.layer_2(x))
+        x = torch.log_softmax(self.layer_3(x), dim=1)
 
         return x
 
@@ -44,33 +41,20 @@ class MNISTClassifier(pl.LightningModule):
         x, y = batch
         logits = self.forward(x)
         loss = self.cross_entropy_loss(logits, y)
-        accuracy = self.accuracy(logits, y)
+        accuracy = self.train_accuracy(logits, y)
 
-        self.log("ptl/train_loss", loss)
-        self.log("ptl/train_accuracy", accuracy)
+        self.log("train/loss", loss, on_step=True, on_epoch=True, prog_bar=True)
+        self.log("train/accuracy", accuracy, on_step=True, on_epoch=True, prog_bar=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
         logits = self.forward(x)
         loss = self.cross_entropy_loss(logits, y)
-        accuracy = self.accuracy(logits, y)
+        accuracy = self.val_accuracy(logits, y)
 
-        self.eval_loss.append(loss)
-        self.eval_accuracy.append(accuracy)
-
-        return {"val_loss": loss, "val_accuracy": accuracy}
-
-    def on_validation_epoch_end(self):
-        avg_loss = torch.stack(self.eval_loss).mean()
-        avg_acc = torch.stack(self.eval_accuracy).mean()
-
-        self.log("ptl/val_loss", avg_loss, sync_dist=True)
-        self.log("ptl/val_accuracy", avg_acc, sync_dist=True)
-
-        self.eval_loss.clear()
-        self.eval_accuracy.clear()
+        self.log("val/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("val/accuracy", accuracy, on_step=False, on_epoch=True, prog_bar=True)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
-        return optimizer
+        return torch.optim.Adam(self.parameters(), lr=self.lr)
