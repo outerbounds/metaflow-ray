@@ -13,12 +13,32 @@ from metaflow import (
 )
 
 
-class vLLMMistralInference(FlowSpec):
+chat = [
+    {
+        "role": "system",
+        "content": "You are a pirate chatbot who always responds in pirate speak!",
+    },
+    {
+        "role": "user",
+        "content": "Who are you?"
+    },
+]
+
+
+class vLLMInference(FlowSpec):
     messages = Parameter(
         name="messages",
         type=JSONType,
         required=True,
-        help="messages in json format"
+        help="messages in json format",
+        default=chat
+    )
+    model_id = Parameter(
+        name="model_id",
+        type=str,
+        required=True,
+        help="model id from HuggingFace",
+        default="unsloth/Llama-3.2-3B-Instruct"
     )
 
     @step
@@ -34,7 +54,6 @@ class vLLMMistralInference(FlowSpec):
     @huggingface_hub
     @step
     def pull_model_from_huggingface(self):
-        self.model_id = "mistralai/Mistral-7B-Instruct-v0.1"
         self.llama_model = current.huggingface_hub.snapshot_download(
             repo_id=self.model_id,
             allow_patterns=["*.safetensors", "*.json", "tokenizer.*"],
@@ -50,6 +69,7 @@ class vLLMMistralInference(FlowSpec):
         cpu=16,
         gpu=8,
         memory=60000,
+        # uses CoreWeave on the Outerbounds platform, comment it out otherwise
         node_selector="gpu.nvidia.com/class=A100_NVLINK_80GB",
         image="registry.hub.docker.com/valayob/gpu-base-image:0.0.9",
         shared_memory=12000
@@ -98,4 +118,4 @@ class vLLMMistralInference(FlowSpec):
 
 
 if __name__ == "__main__":
-    vLLMMistralInference()
+    vLLMInference()
