@@ -12,4 +12,4 @@ chat = [
 ]
 
 with Runner(flow_file="./flow.py", pylint=False, environment="fast-bakery") as runner:
-    result = runner.run(messages=chat)
+    result = runner.run(model_id="unsloth/Llama-3.2-3B-Instruct", messages=chat)
