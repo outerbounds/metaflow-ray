@@ -10,7 +10,7 @@ The following four files showcase how to tune PyTorch models using the `@metaflo
 
 - This can be run using: `python examples/tune_pytorch/flow_cpu.py --no-pylint --environment=pypi run`
 
-4. `flow_gpu.py` contains a flow that uses `@metaflow_ray` with `@kubernetes` to tune the PyTorch model. It also passes in `gpu` requirement to `@kubernetes` and the `ScalingConfig` when defining the search space.
+4. `flow_gpu.py` contains a flow that uses `@metaflow_ray` with `@kubernetes` to tune the PyTorch model. It also passes in `gpu` requirement to `@kubernetes` and the `run` function from `utils.py`.
 
 - This can be run using: `python examples/tune_pytorch/flow_gpu.py --no-pylint --environment=pypi run`
 - If you are on the [Outerbounds](https://outerbounds.com/) platform, you can leverage `fast-bakery` for blazingly fast docker image builds. This can be used by `python examples/tune_pytorch/flow_gpu.py --no-pylint --environment=fast-bakery run`
