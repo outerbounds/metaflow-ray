@@ -45,6 +45,8 @@ class RayTuneTorchGPU(FlowSpec):
         }
 
         results_list = run(
+            num_cpus=8,
+            num_gpus=1,
             search_space=search_space,
             batch_size=self.batch_size,
             test_batch_size=self.test_batch_size,
