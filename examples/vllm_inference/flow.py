@@ -69,8 +69,8 @@ class vLLMInference(FlowSpec):
         cpu=16,
         gpu=8,
         memory=60000,
-        # uses CoreWeave on the Outerbounds platform, comment it out otherwise
-        node_selector="gpu.nvidia.com/class=A100_NVLINK_80GB",
+        ## if using CoreWeave on the Outerbounds platform, uncomment it
+        # node_selector="gpu.nvidia.com/class=A100_NVLINK_80GB",
         image="registry.hub.docker.com/valayob/gpu-base-image:0.0.9",
         shared_memory=12000
     )
