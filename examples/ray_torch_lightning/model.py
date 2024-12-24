@@ -43,8 +43,8 @@ class MNISTClassifier(L.LightningModule):
         loss = self.cross_entropy_loss(logits, y)
         accuracy = self.train_accuracy(logits, y)
 
-        self.log("train/loss", loss, on_step=True, on_epoch=True, prog_bar=True)
-        self.log("train/accuracy", accuracy, on_step=True, on_epoch=True, prog_bar=True)
+        self.log("train/loss", loss, on_step=True, on_epoch=True, prog_bar=False, sync_dist=True)
+        self.log("train/accuracy", accuracy, on_step=True, on_epoch=True, prog_bar=False, sync_dist=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -53,8 +53,8 @@ class MNISTClassifier(L.LightningModule):
         loss = self.cross_entropy_loss(logits, y)
         accuracy = self.val_accuracy(logits, y)
 
-        self.log("val/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("val/accuracy", accuracy, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("val/loss", loss, on_step=False, on_epoch=True, prog_bar=False, sync_dist=True)
+        self.log("val/accuracy", accuracy, on_step=False, on_epoch=True, prog_bar=False, sync_dist=True)
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=self.lr)
