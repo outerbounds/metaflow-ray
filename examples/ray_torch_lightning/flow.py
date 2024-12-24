@@ -72,14 +72,12 @@ class RayLightningTuneFlow(FlowSpec):
             reduction_factor=2
         )
 
-        trainable = partial(
-            train_func,
-            batch_size=self.batch_size,
-            num_epochs=self.num_epochs,
-        )
-
         ray_trainer = TorchTrainer(
-            trainable,
+            partial(
+                train_func,
+                batch_size=self.batch_size,
+                num_epochs=self.num_epochs,
+            ),
             scaling_config=air.ScalingConfig(
                 num_workers=4, use_gpu=True, resources_per_worker={"CPU": 8, "GPU": 1},
             ),
