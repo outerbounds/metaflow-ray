@@ -29,19 +29,17 @@ class RayTuneTorchCPU(FlowSpec):
         import pandas as pd
         from utils import run, plot
         from matplotlib import pyplot as plt
-        from ray.air.config import ScalingConfig
 
         ray.init()
 
         search_space = {
             "lr": ray.tune.sample_from(lambda _: 10 ** (-10 * np.random.rand())),
             "momentum": ray.tune.uniform(0.1, 0.9),
-            "scaling_config": ScalingConfig(
-                num_workers=2, resources_per_worker={"CPU": 4}
-            ),
         }
 
         results_list = run(
+            num_cpus=4,
+            num_gpus=0,
             search_space=search_space,
             batch_size=self.batch_size,
             test_batch_size=self.test_batch_size,

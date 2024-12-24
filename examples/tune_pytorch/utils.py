@@ -104,16 +104,18 @@ def run(
     run_config_storage_path=None,
     n_epochs=10,
 ):
-    trainable = partial(
-        train_mnist,
-        batch_size=batch_size,
-        test_batch_size=test_batch_size,
-        smoke_test=smoke_test,
-        n_epochs=n_epochs,
+    trainable = tune.with_resources(
+        partial(
+            train_mnist,
+            batch_size=batch_size,
+            test_batch_size=test_batch_size,
+            smoke_test=smoke_test,
+            n_epochs=n_epochs,
+        ),
+        {"cpu": num_cpus, "gpu": num_gpus}
     )
-    trainable_with_gpu = tune.with_resources(trainable, {"cpu": num_cpus, "gpu": num_gpus})
     tuner = tune.Tuner(
-        trainable_with_gpu,
+        trainable,
         tune_config=tune.TuneConfig(
             num_samples=num_samples,
             scheduler=ASHAScheduler(metric="mean_accuracy", mode="max"),

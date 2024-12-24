@@ -30,18 +30,12 @@ class RayTuneTorchGPU(FlowSpec):
         import pandas as pd
         from utils import run, plot
         from matplotlib import pyplot as plt
-        from ray.air.config import ScalingConfig
 
         ray.init()
 
         search_space = {
             "lr": ray.tune.sample_from(lambda _: 10 ** (-10 * np.random.rand())),
             "momentum": ray.tune.uniform(0.1, 0.9),
-            "scaling_config": ScalingConfig(
-                use_gpu=True,
-                num_workers=4,
-                resources_per_worker={"CPU": 8, "GPU": 1},
-            ),
         }
 
         results_list = run(
