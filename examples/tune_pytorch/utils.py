@@ -94,6 +94,8 @@ def train_mnist(
 
 
 def run(
+    num_cpus,
+    num_gpus,
     search_space=None,
     batch_size=512,
     test_batch_size=256,
@@ -102,14 +104,16 @@ def run(
     run_config_storage_path=None,
     n_epochs=10,
 ):
+    trainable = partial(
+        train_mnist,
+        batch_size=batch_size,
+        test_batch_size=test_batch_size,
+        smoke_test=smoke_test,
+        n_epochs=n_epochs,
+    )
+    trainable_with_gpu = tune.with_resources(trainable, {"cpu": num_cpus, "gpu": num_gpus})
     tuner = tune.Tuner(
-        partial(
-            train_mnist,
-            batch_size=batch_size,
-            test_batch_size=test_batch_size,
-            smoke_test=smoke_test,
-            n_epochs=n_epochs,
-        ),
+        trainable_with_gpu,
         tune_config=tune.TuneConfig(
             num_samples=num_samples,
             scheduler=ASHAScheduler(metric="mean_accuracy", mode="max"),
