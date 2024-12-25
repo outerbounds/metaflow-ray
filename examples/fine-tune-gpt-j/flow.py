@@ -1,4 +1,4 @@
-from metaflow import FlowSpec, Parameter, step, pypi, kubernetes, card, current, metaflow_ray
+from metaflow import FlowSpec, Parameter, step, pypi, kubernetes, current, metaflow_ray
 from gpu_profile import gpu_profile
 
 
@@ -35,8 +35,16 @@ class RayGPTJFlow(FlowSpec):
         ray.init()
 
         current_dataset = load_dataset("tiny_shakespeare", trust_remote_code=True)
-        train_dataset = ray.data.from_huggingface(current_dataset['train']).map_batches(split_text, batch_format="pandas").map_batches(tokenize, batch_format="pandas")
-        eval_dataset = ray.data.from_huggingface(current_dataset['validation']).map_batches(split_text, batch_format="pandas").map_batches(tokenize, batch_format="pandas")
+        train_dataset = (
+            ray.data.from_huggingface(current_dataset['train'])
+            .map_batches(split_text, batch_format="pandas")
+            .map_batches(tokenize, batch_format="pandas")
+        )
+        eval_dataset = (
+            ray.data.from_huggingface(current_dataset['validation'])
+            .map_batches(split_text, batch_format="pandas")
+            .map_batches(tokenize, batch_format="pandas")
+        )
 
         trainer = TorchTrainer(
             train_func,
@@ -57,7 +65,7 @@ class RayGPTJFlow(FlowSpec):
             run_config=RunConfig(storage_path=current.ray_storage_path)
         )
 
-        self.result = trainer.fit()
+        trainer.fit()
 
     @step
     def start(self):
@@ -96,11 +104,9 @@ class RayGPTJFlow(FlowSpec):
         self.merge_artifacts(inputs)
         self.next(self.end)
 
-    @card
-    @pypi(packages={"ray[train]": "2.40.0"})
     @step
     def end(self):
-        self.metrics_df = self.result.metrics_dataframe
+        pass
 
 
 if __name__ == "__main__":
