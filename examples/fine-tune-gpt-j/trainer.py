@@ -1,4 +1,5 @@
 import os
+import ray
 import torch
 import evaluate
 import numpy as np
@@ -14,6 +15,7 @@ from transformers import (
     default_data_collator,
 )
 from transformers.utils.logging import disable_progress_bar, enable_progress_bar
+from ray.train.huggingface.transformers import RayTrainReportCallback, prepare_trainer
 
 
 MODEL_NAME = "EleutherAI/gpt-j-6B"
@@ -24,6 +26,7 @@ CACHE_DIR = ".cache/GPTJ-6B"
 @dataclass
 class TrainerConfig:
     batch_size: int = 4
+    max_steps: int = 10
     epochs: int = 2
     warmup_steps: int = 0
     learning_rate: float = 2e-5
@@ -84,9 +87,7 @@ def load_model_with_retry(model_name: str) -> GPTJForCausalLM:
         try:
             model = GPTJForCausalLM.from_pretrained(
                 model_name,
-                use_cache=True,
-                resume_download=True,
-                trust_remote_code=True,
+                use_cache=False, # gradient_checkpointing as True requires use_cache to be False
                 cache_dir=CACHE_DIR,
             )
             return model
@@ -98,18 +99,13 @@ def load_model_with_retry(model_name: str) -> GPTJForCausalLM:
                 raise Exception("Max retries reached. Failed to load model.")
 
 
-def trainer_init_per_worker(
-    train_dataset,
-    eval_dataset=None,
-    **config
-) -> Trainer:
+def train_func(config):
     os.environ["OMP_NUM_THREADS"] = str(
         session.get_trial_resources().bundles[-1].get("CPU", 1)
     )
     torch.backends.cuda.matmul.allow_tf32 = True
 
     trainer_config = TrainerConfig(**config)
-
     training_args = TrainingArguments(
         "output",
         per_device_train_batch_size=trainer_config.batch_size,
@@ -118,6 +114,7 @@ def trainer_init_per_worker(
         weight_decay=trainer_config.weight_decay,
         warmup_steps=trainer_config.warmup_steps,
         num_train_epochs=trainer_config.epochs,
+        max_steps=trainer_config.max_steps,
         logging_steps=1,
         save_strategy="no",
         label_names=["input_ids", "attention_mask"],
@@ -136,12 +133,23 @@ def trainer_init_per_worker(
     model.resize_token_embeddings(len(tokenizer))
     enable_progress_bar()
 
-    return Trainer(
+    train_dataset = ray.train.get_dataset_shard("train")
+    eval_dataset = ray.train.get_dataset_shard("evaluation")
+
+    train_iterable_ds = train_dataset.iter_torch_batches(batch_size=trainer_config.batch_size)
+    eval_iterable_ds = eval_dataset.iter_torch_batches(batch_size=trainer_config.batch_size)
+
+    trainer = Trainer(
         model=model,
         args=training_args,
-        train_dataset=train_dataset,
-        eval_dataset=eval_dataset,
+        train_dataset=train_iterable_ds,
+        eval_dataset=eval_iterable_ds,
         compute_metrics=compute_metrics,
-        tokenizer=tokenizer,
+        processing_class=tokenizer,
         data_collator=default_data_collator,
     )
+
+    trainer.add_callback(RayTrainReportCallback())
+
+    trainer = prepare_trainer(trainer)
+    trainer.train()

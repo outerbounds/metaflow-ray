@@ -1,4 +1,4 @@
-from metaflow import FlowSpec, Parameter, step, pypi, kubernetes, current, metaflow_ray
+from metaflow import FlowSpec, Parameter, step, pypi, kubernetes, card, current, metaflow_ray
 from gpu_profile import gpu_profile
 
 
@@ -12,68 +12,78 @@ class RayGPTJFlow(FlowSpec):
     num_epochs = Parameter(
         name="num_epochs",
         type=int,
-        default=1,
+        default=2,
         help="number of epochs"
+    )
+    max_steps = Parameter(
+        name="max_steps",
+        type=int,
+        default=10,
+        help="number of steps at max"
     )
 
     def _do_ray_job(self):
         import ray
         import ray.data
         from datasets import load_dataset
-        from ray.data.preprocessors import Chain
+        from ray.train.torch import TorchTrainer
         from ray.air import RunConfig, ScalingConfig
-        from ray.data.preprocessors import BatchMapper
-        from ray.train.huggingface import TransformersTrainer
 
+        from trainer import train_func
         from dataloader import split_text, tokenize
-        from trainer import trainer_init_per_worker
 
         ray.init()
 
-        current_dataset = load_dataset("tiny_shakespeare")
-        ray_datasets = ray.data.from_huggingface(current_dataset)
-        splitter = BatchMapper(split_text, batch_format="pandas")
-        tokenizer = BatchMapper(tokenize, batch_format="pandas")
+        current_dataset = load_dataset("tiny_shakespeare", trust_remote_code=True)
+        train_dataset = ray.data.from_huggingface(current_dataset['train']).map_batches(split_text, batch_format="pandas").map_batches(tokenize, batch_format="pandas")
+        eval_dataset = ray.data.from_huggingface(current_dataset['validation']).map_batches(split_text, batch_format="pandas").map_batches(tokenize, batch_format="pandas")
 
-        trainer = TransformersTrainer(
-            trainer_init_per_worker=trainer_init_per_worker,
-            trainer_init_config={
+        trainer = TorchTrainer(
+            train_func,
+            train_loop_config={
                 "batch_size": self.batch_size,
+                "max_steps": self.max_steps,
                 "epochs": self.num_epochs,
             },
             scaling_config=ScalingConfig(
                 num_workers=4,
-                use_gpu=True
+                use_gpu=True,
+                resources_per_worker={"CPU": 8, "GPU": 1},
             ),
             datasets={
-                "train": ray_datasets["train"],
-                "evaluation": ray_datasets["validation"],
+                "train": train_dataset,
+                "evaluation": eval_dataset,
             },
-            preprocessor=Chain(splitter, tokenizer),
-            run_config=RunConfig(storage_path=current.ray_storage_path),
+            run_config=RunConfig(storage_path=current.ray_storage_path)
         )
 
-        results = trainer.fit()
-        print(results)
-        checkpoint = results.checkpoint
-        print(checkpoint)
+        self.result = trainer.fit()
 
     @step
     def start(self):
         self.next(self.train, num_parallel=4)
 
     @gpu_profile(interval=1)
-    @kubernetes(cpu=8, gpu=1, memory=60000, shared_memory=12000, use_tmpfs=True)
+    @kubernetes(
+        image="registry.hub.docker.com/rayproject/ray:2.40.0-py311-gpu",
+        cpu=8,
+        gpu=1,
+        memory=60000,
+        shared_memory=12000,
+        use_tmpfs=True
+    )
     @metaflow_ray
     @pypi(
-        python="3.10",
         packages={
+            "torch": "2.5.1",
             "matplotlib": "3.9.3",
             "pandas": "2.2.3",
             "datasets": "3.2.0",
             "evaluate": "0.4.3",
             "transformers": "4.47.1",
-            "ray[air]": "2.40.0"
+            "accelerate": "1.2.1",
+            "deepspeed": "0.16.2",
+            "setuptools": "75.6.0",
         }
     )
     @step
@@ -83,11 +93,14 @@ class RayGPTJFlow(FlowSpec):
 
     @step
     def join(self, inputs):
+        self.merge_artifacts(inputs)
         self.next(self.end)
 
+    @card
+    @pypi(packages={"ray[train]": "2.40.0"})
     @step
     def end(self):
-        pass
+        self.metrics_df = self.result.metrics_dataframe
 
 
 if __name__ == "__main__":
