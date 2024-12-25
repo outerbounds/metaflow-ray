@@ -78,10 +78,10 @@ with various Ray applications.
 | [Process Dataframe!](examples/dataframe_process/README.md) | Process a large dataframe in chunks with Ray and Python, then do it inside a Metaflow task! |
 | [Custom Docker Images!](examples/custom_docker_images/README.md) | Specify custom docker images on kubernetes / batch with Ray on Metaflow |
 | [Train XGBoost](examples/train_xgboost/README.md) | Use [Ray Train](https://docs.ray.io/en/latest/train/train.html) to build XGBoost models on multiple nodes, including CPU and GPU examples. |
-| [Tune PyTorch](examples/tune/README.md) | Use [Ray Tune](https://docs.ray.io/en/latest/tune/tune.html) to build PyTorch models on one or more nodes, including CPU and GPU examples. |  
-| [End-to-end Batch Workflow](examples/e2e-batch/README.md) | Train models, evaluate them, and serve them. See how to use Metaflow workflows and various Ray abstractions together in a complete workflow. |
-| [PyTorch Lightning](examples/ray-lightning-tune/README.md) | Get started run a PyTorch Lightning job on the Ray cluster formed in a `@metaflow_ray` step. |
+| [Tune PyTorch](examples/tune/README.md) | Use [Ray Tune](https://docs.ray.io/en/latest/tune/tune.html) to build PyTorch models on one or more nodes, including CPU and GPU examples. |
+| [PyTorch Lightning](examples/ray_torch_lightning/README.md) | Get started with running a PyTorch Lightning job on the Ray cluster formed in a `@metaflow_ray` step. |
 | [GPT-J Fine Tuning](examples/fine-tune-gpt-j/README.md) | Fine tune the 6B parameter GPT-J model on a Ray cluster. |
+| [End-to-end Batch Workflow](examples/e2e-batch/README.md) | Train models, evaluate them, and serve them. See how to use Metaflow workflows and various Ray abstractions together in a complete workflow. |
 
 ### License
 `metaflow-ray` is distributed under the <u>Apache License</u>.
