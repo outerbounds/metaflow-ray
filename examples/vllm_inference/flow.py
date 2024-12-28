@@ -66,13 +66,13 @@ class vLLMInference(FlowSpec):
         load=[("llama_model", "./llama_model")]
     )
     @kubernetes(
-        cpu=16,
-        gpu=8,
-        memory=60000,
+        cpu=12,
+        gpu=1,
+        memory=28000,
         ## if using CoreWeave on the Outerbounds platform, uncomment it
         # node_selector="gpu.nvidia.com/class=A100_NVLINK_80GB",
         image="registry.hub.docker.com/valayob/gpu-base-image:0.0.9",
-        shared_memory=12000
+        shared_memory=8000
     )
     @metaflow_ray(
         # 20 mins timeout for all workers to join
@@ -94,7 +94,8 @@ class vLLMInference(FlowSpec):
         tokenizer = AutoTokenizer.from_pretrained(current.model.loaded["llama_model"])
         llm = LLM(
             model=current.model.loaded["llama_model"],
-            tensor_parallel_size=8,
+            tensor_parallel_size=1,
+            max_model_len=4096,
             enforce_eager=True,
         )
         sampling_params = SamplingParams(temperature=0.5)
