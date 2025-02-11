@@ -14,6 +14,7 @@ from .status_notifier import (
     HeartbeatTimeoutException,
     TaskFailedException,
     wait_for_task_completion,
+    TaskUnreachableException,
 )
 from .exceptions import ControlNodeHostNotReachableException, RayException
 from .datastore import task_sync_barrier, DecoratorDatastore
@@ -26,8 +27,12 @@ from .ray_utils import (
 )
 from .constants import RAY_SUFFIX
 
+
 def _worker_node_heartbeat_monitor(
-    datastore: DecoratorDatastore, node_index: int, heartbeat_timeout=60 * 10
+    datastore: DecoratorDatastore,
+    node_index: int,
+    heartbeat_timeout=60 * 10,
+    unreachable_timeout=60 * 10,
 ):
     """
     The worker tasks will poll for the control task's heartbeat and do nothing else.
@@ -52,17 +57,29 @@ def _worker_node_heartbeat_monitor(
         # Poll the control task's heartbeat and fail if control task fails
         # or if the heartbeat interval crosses the threshold.
         wait_for_task_completion(
-            _status_notifier, node_index=0, heartbeat_timeout=heartbeat_timeout
+            _status_notifier,
+            node_index=0,
+            heartbeat_timeout=heartbeat_timeout,
+            unreachable_timeout=unreachable_timeout,
         )
         _status_notifier.finished(node_index)
     except HeartbeatTimeoutException:
         _status_notifier.failed(node_index)
         raise RayException(
             f"Control task heartbeat timed out. Control task has not published a heartbeat for {heartbeat_timeout} seconds."
+            "This could happen because the control task having intermittently crashed and failed to restart."
+            "To debug this, please set the environment variable `METAFLOW_RAY_DEBUG_MODE` to `true` and rerun the flow."
         )
     except TaskFailedException:
         _status_notifier.failed(node_index)
         raise RayException("Control task reported failure.")
+    except TaskUnreachableException:
+        _status_notifier.failed(node_index)
+        raise RayException(
+            f"Ray worker tasks failed to get any heartbeats from the control task for the last {unreachable_timeout} seconds."
+            "This could happen due to the control task not being able to publish heartbeats to the datastore."
+            "To debug this, please set the environment variable `METAFLOW_RAY_DEBUG_MODE` to `true` and rerun the flow."
+        )
 
 
 class RayDecorator(ParallelDecorator):
@@ -82,7 +99,7 @@ class RayDecorator(ParallelDecorator):
         )
         self.flow_datastore = flow_datastore
         self._heartbeat_thread = None
-    
+
     def task_pre_step(
         self,
         step_name,
@@ -121,12 +138,17 @@ class RayDecorator(ParallelDecorator):
         storage_root = self.deco_datastore.get_storage_root
         if storage_root.startswith(RAY_SUFFIX):
             from metaflow.metaflow_config import DATASTORE_SYSROOT_S3
-            
+
             storage_root = os.path.join(DATASTORE_SYSROOT_S3, storage_root)
 
-        current._update_env({
-            "ray_storage_path": os.path.join(storage_root, "%s/%s/%s" % (flow.name, run_id, step_name))
-        })
+        current._update_env(
+            {
+                "ray_storage_path": os.path.join(
+                    storage_root,
+                    "%s/%s/%s/%s" % (flow.name, run_id, step_name, str(retry_count)),
+                )
+            }
+        )
 
     def _resolve_port(self):
         main_port = self.attributes["main_port"]

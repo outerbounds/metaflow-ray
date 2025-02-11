@@ -6,7 +6,19 @@ from threading import Thread, Event
 from .datastore import DecoratorDatastore, _best_effort_read_key
 from .ray_utils import warning_message
 
+DEBUG_MODE = os.environ.get("METAFLOW_RAY_DEBUG_MODE", "false").lower() in [
+    "true",
+    "1",
+    "enabled",
+    "enable",
+]
+
 TaskStatus = namedtuple("TaskStatus", ["status", "timestamp", "node_index"])
+
+
+def debug_logger(message):
+    if DEBUG_MODE:
+        warning_message(message)
 
 
 class TASK_STATUS:
@@ -89,6 +101,8 @@ def wait_for_task_to_be_reachable(
             # the task was unreachable and we hit a timeout for that.
             raise TimeoutError
 
+    debug_logger(f"Task {node_index} is reachable")
+
 
 def wait_for_task_completion(
     task_status_notifier: TaskStatusNotifier,
@@ -97,14 +111,41 @@ def wait_for_task_completion(
     unreachable_timeout: int = 60 * 5,
 ):
     wait_for_task_to_be_reachable(task_status_notifier, node_index, unreachable_timeout)
+
+    task_unreachable_since = None
     while True:
         status = task_status_notifier.read(node_index)
-        if status.status == TASK_STATUS.FINISHED:
+        debug_logger(
+            f"Task {node_index} status: {status.status} with timestamp {status.timestamp}"
+        )
+
+        if status.status == TASK_STATUS.RUNNING:
+            task_unreachable_since = None
+
+        if status.status == TASK_STATUS.FINISHED:  # Success path
+            debug_logger(f"Task {node_index} finished")
             return
-        if status.status == TASK_STATUS.FAILED:
+        if status.status == TASK_STATUS.FAILED:  # Failure path
+            debug_logger(f"Task {node_index} failed")
             raise TaskFailedException
-        if time.time() - status.timestamp > heartbeat_timeout:
+
+        if status.status == TASK_STATUS.UNREACHABLE:
+            debug_logger(f"Task {node_index} unreachable")
+            if task_unreachable_since is None:
+                task_unreachable_since = time.time()
+
+            if time.time() - task_unreachable_since > unreachable_timeout:
+                debug_logger(f"Task Reached {node_index} unreachable timeout")
+                raise TaskUnreachableException
+            else:
+                debug_logger(
+                    f"Task {node_index} still unreachable after {round(time.time() - task_unreachable_since, 2)} seconds"
+                )
+
+        elif time.time() - status.timestamp > heartbeat_timeout:  # Failure path
+            debug_logger(f"Task {node_index} heartbeat timeout")
             raise HeartbeatTimeoutException
+
         time.sleep(1)
 
 
