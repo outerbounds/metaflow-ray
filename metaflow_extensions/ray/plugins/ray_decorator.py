@@ -25,6 +25,7 @@ from .ray_utils import (
     warning_message,
     wait_for_ray_nodes_to_join,
 )
+from .ray_log_tailer import RayLogTailer
 from .constants import RAY_SUFFIX
 
 
@@ -89,6 +90,9 @@ class RayDecorator(ParallelDecorator):
         "all_nodes_started_timeout": 90,
         "heartbeat_timeout": 60 * 10,  # 10 minutes
         "unreachable_timeout": 60 * 10,  # 10 minutes
+        "enable_worker_logs": False,  # Stream Ray logs to worker node CloudWatch
+        "ray_logging_level": None,  # Ray logging level (debug, info, warning, error)
+        "ray_log_style": None,  # Ray log format (pretty, record, auto)
     }
     IS_PARALLEL = True
 
@@ -230,15 +234,26 @@ class RayDecorator(ParallelDecorator):
             # all nodes have started. This ensures that user code will have
             # access to a ray cluster with expected number of nodes.
             self.setup_distributed_env(flow)
+            
+            # Optionally start tailing Ray logs to stream them to CloudWatch
+            log_tailer = None
+            if self.attributes["enable_worker_logs"]:
+                log_tailer = RayLogTailer()
+                log_tailer.start()
+            
             # The worker tasks will wait for the control task's heartbeat.
             # if it reaches a point where the control task failed for some reason
             # or the control task stopped publishing heartbeats, the worker task will fail.
-            _worker_node_heartbeat_monitor(
-                self.deco_datastore,
-                current.parallel.node_index,
-                heartbeat_timeout=self.attributes["heartbeat_timeout"],
-                unreachable_timeout=self.attributes["unreachable_timeout"],
-            )
+            try:
+                _worker_node_heartbeat_monitor(
+                    self.deco_datastore,
+                    current.parallel.node_index,
+                    heartbeat_timeout=self.attributes["heartbeat_timeout"],
+                    unreachable_timeout=self.attributes["unreachable_timeout"],
+                )
+            finally:
+                if log_tailer:
+                    log_tailer.stop()
 
         # A status notifier helps the control node publish heartbeats
         # and it helps the worker nodes monitor the control node's heartbeat.
@@ -280,6 +295,11 @@ class RayDecorator(ParallelDecorator):
         main_port = self._resolve_port()
         main_ip = resolve_main_ip()
         start_ray_processes(
-            self.ubf_context, main_ip, main_port, current.parallel.node_index
+            self.ubf_context,
+            main_ip,
+            main_port,
+            current.parallel.node_index,
+            logging_level=self.attributes["ray_logging_level"],
+            log_style=self.attributes["ray_log_style"],
         )
         wait_for_ray_nodes_to_join(self.attributes["all_nodes_started_timeout"] or 300)
