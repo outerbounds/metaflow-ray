@@ -90,7 +90,7 @@ class RayDecorator(ParallelDecorator):
         "all_nodes_started_timeout": 90,
         "heartbeat_timeout": 60 * 10,  # 10 minutes
         "unreachable_timeout": 60 * 10,  # 10 minutes
-        "enable_worker_logs": False,  # Stream Ray logs to worker node CloudWatch
+        "enable_worker_logs": False,  # Stream Ray actor stdout/stderr to CloudWatch
         "ray_logging_level": None,  # Ray logging level (debug, info, warning, error)
         "ray_log_style": None,  # Ray log format (pretty, record, auto)
     }
@@ -234,13 +234,14 @@ class RayDecorator(ParallelDecorator):
             # all nodes have started. This ensures that user code will have
             # access to a ray cluster with expected number of nodes.
             self.setup_distributed_env(flow)
-            
-            # Optionally start tailing Ray logs to stream them to CloudWatch
+
+            # Optionally tail Ray actor stdout/stderr to CloudWatch
+            # Only captures *.out and *.err files (actor output), not system logs
             log_tailer = None
             if self.attributes["enable_worker_logs"]:
                 log_tailer = RayLogTailer()
                 log_tailer.start()
-            
+
             # The worker tasks will wait for the control task's heartbeat.
             # if it reaches a point where the control task failed for some reason
             # or the control task stopped publishing heartbeats, the worker task will fail.

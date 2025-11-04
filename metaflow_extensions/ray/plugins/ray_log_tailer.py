@@ -10,12 +10,14 @@ class RayLogTailer:
     Tails Ray log files and streams them to stdout so they appear in CloudWatch logs.
     """
 
-    def __init__(self, ray_session_dir=None, poll_interval=1.0):
+    def __init__(self, ray_session_dir=None, poll_interval=1.0, include_patterns=None):
         self.ray_session_dir = ray_session_dir
         self.poll_interval = poll_interval
         self.running = False
         self.thread = None
         self.file_positions = {}
+        # Default: only capture actor stdout/stderr, not system logs
+        self.include_patterns = include_patterns or ["*.out", "*.err"]
 
     def _find_ray_session_dir(self):
         """Find the Ray session directory."""
@@ -62,10 +64,13 @@ class RayLogTailer:
             if session_dir:
                 logs_dir = os.path.join(session_dir, "logs")
                 if os.path.exists(logs_dir):
-                    # Tail all log files in the logs directory
-                    log_files = glob.glob(os.path.join(logs_dir, "*.log"))
-                    for log_file in log_files:
-                        self._tail_file(log_file)
+                    # Tail log files based on include_patterns
+                    # *.out/*.err = Actor/task stdout/stderr (print statements!)
+                    # *.log = Ray system logs (raylet, gcs, etc.) - often noisy
+                    for pattern in self.include_patterns:
+                        full_pattern = os.path.join(logs_dir, pattern)
+                        for log_file in glob.glob(full_pattern):
+                            self._tail_file(log_file)
 
             time.sleep(self.poll_interval)
 
