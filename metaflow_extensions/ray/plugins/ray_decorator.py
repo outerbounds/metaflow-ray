@@ -48,7 +48,6 @@ def _worker_node_heartbeat_monitor(
     - Control task fails intermittently.
     - The worker/control fails intermittently such as node being wiped off
     """
-    # TODO : Make heartbeat timeout configurable
     _status_notifier = TaskStatusNotifier(datastore)
     # Worker task statuses are only for bookkeeping.
     # They are not used by the control task in any way.
@@ -88,6 +87,8 @@ class RayDecorator(ParallelDecorator):
         "main_port": None,
         "worker_polling_freq": 10,  # We DONT use this anymore
         "all_nodes_started_timeout": 90,
+        "heartbeat_timeout": 60 * 10,  # 10 minutes
+        "unreachable_timeout": 60 * 10,  # 10 minutes
     }
     IS_PARALLEL = True
 
@@ -235,7 +236,8 @@ class RayDecorator(ParallelDecorator):
             _worker_node_heartbeat_monitor(
                 self.deco_datastore,
                 current.parallel.node_index,
-                heartbeat_timeout=10 * 60,  # 10 minutes (todo: make this configurable)
+                heartbeat_timeout=self.attributes["heartbeat_timeout"],
+                unreachable_timeout=self.attributes["unreachable_timeout"],
             )
 
         # A status notifier helps the control node publish heartbeats
