@@ -16,8 +16,9 @@ class RayLogTailer:
         self.running = False
         self.thread = None
         self.file_positions = {}
-        # Default: only capture actor stdout/stderr, not system logs
-        self.include_patterns = include_patterns or ["*.out", "*.err"]
+        # Default: only capture worker stdout/stderr (actor output)
+        # worker-*.out/err excludes system components like raylet.out, gcs_server.out
+        self.include_patterns = include_patterns or ["worker-*.out", "worker-*.err"]
 
     def _find_ray_session_dir(self):
         """Find the Ray session directory."""
@@ -64,9 +65,7 @@ class RayLogTailer:
             if session_dir:
                 logs_dir = os.path.join(session_dir, "logs")
                 if os.path.exists(logs_dir):
-                    # Tail log files based on include_patterns
-                    # *.out/*.err = Actor/task stdout/stderr (print statements!)
-                    # *.log = Ray system logs (raylet, gcs, etc.) - often noisy
+                    # Tail worker output files only (worker-*.out, worker-*.err)
                     for pattern in self.include_patterns:
                         full_pattern = os.path.join(logs_dir, pattern)
                         for log_file in glob.glob(full_pattern):

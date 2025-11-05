@@ -235,8 +235,8 @@ class RayDecorator(ParallelDecorator):
             # access to a ray cluster with expected number of nodes.
             self.setup_distributed_env(flow)
 
-            # Optionally tail Ray actor stdout/stderr to CloudWatch
-            # Only captures *.out and *.err files (actor output), not system logs
+            # Optionally tail Ray actor/task stdout/stderr to CloudWatch
+            # Only captures worker-*.out and worker-*.err files (actor output)
             log_tailer = None
             if self.attributes["enable_worker_logs"]:
                 log_tailer = RayLogTailer()
