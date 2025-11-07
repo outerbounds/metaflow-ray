@@ -2,6 +2,7 @@ import os
 import sys
 from functools import partial
 import json
+import tempfile
 from metaflow.unbounded_foreach import UBF_CONTROL
 from metaflow.plugins.parallel_decorator import (
     ParallelDecorator,
@@ -90,11 +91,12 @@ class RayDecorator(ParallelDecorator):
         "all_nodes_started_timeout": 90,
         "heartbeat_timeout": 60 * 10,  # 10 minutes
         "unreachable_timeout": 60 * 10,  # 10 minutes
-        "enable_worker_logs": False,  # Stream Ray actor stdout/stderr to CloudWatch
-        "ray_logging_level": None,  # Ray logging level (debug, info, warning, error)
-        "ray_log_style": None,  # Ray log format (pretty, record, auto)
+        "enable_worker_logs": False,  # Stream Ray actor stdout/stderr to stdout
+        "logging_level": None,  # Ray logging level (debug, info, warning, error)
+        "log_style": None,  # Ray log format (pretty, record, auto)
     }
     IS_PARALLEL = True
+    VALID_LOG_STYLES = ["pretty", "record", "auto"]
 
     def step_init(
         self, flow, graph, step_name, decorators, environment, flow_datastore, logger
@@ -104,6 +106,16 @@ class RayDecorator(ParallelDecorator):
         )
         self.flow_datastore = flow_datastore
         self._heartbeat_thread = None
+        self.ray_temp_dir = None
+
+        # Validate log_style parameter
+        log_style = self.attributes.get("log_style")
+        if log_style is not None:
+            if log_style not in self.VALID_LOG_STYLES:
+                raise ValueError(
+                    f"Invalid log_style: '{log_style}'. "
+                    f"Valid options are: {', '.join(self.VALID_LOG_STYLES)}"
+                )
 
     def task_pre_step(
         self,
@@ -235,11 +247,15 @@ class RayDecorator(ParallelDecorator):
             # access to a ray cluster with expected number of nodes.
             self.setup_distributed_env(flow)
 
-            # Optionally tail Ray actor/task stdout/stderr to CloudWatch
+            # Optionally tail Ray actor/task stdout/stderr
             # Only captures worker-*.out and worker-*.err files (actor output)
             log_tailer = None
             if self.attributes["enable_worker_logs"]:
-                log_tailer = RayLogTailer()
+                log_tailer = RayLogTailer(
+                    ray_temp_dir=self.ray_temp_dir,
+                    poll_interval=1.0,
+                    include_patterns=["worker-*.out", "worker-*.err"],
+                )
                 log_tailer.start()
 
             # The worker tasks will wait for the control task's heartbeat.
@@ -293,6 +309,10 @@ class RayDecorator(ParallelDecorator):
         - Wait for all ray nodes to join the cluster (on both worker and control.)
         """
         self.wait_for_all_nodes_to_start()
+
+        # Create a temporary directory for Ray
+        self.ray_temp_dir = tempfile.mkdtemp(prefix="metaflow_ray_")
+
         main_port = self._resolve_port()
         main_ip = resolve_main_ip()
         start_ray_processes(
@@ -300,7 +320,8 @@ class RayDecorator(ParallelDecorator):
             main_ip,
             main_port,
             current.parallel.node_index,
-            logging_level=self.attributes["ray_logging_level"],
-            log_style=self.attributes["ray_log_style"],
+            temp_dir=self.ray_temp_dir,
+            logging_level=self.attributes["logging_level"],
+            log_style=self.attributes["log_style"],
         )
         wait_for_ray_nodes_to_join(self.attributes["all_nodes_started_timeout"] or 300)
