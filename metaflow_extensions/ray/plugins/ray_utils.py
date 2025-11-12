@@ -38,26 +38,36 @@ def warning_message(message, prefix="[@metaflow_ray]"):
     print(msg, file=sys.stderr)
 
 
-def start_ray_processes(ubf_context, main_ip, main_port, node_index):
+def start_ray_processes(
+    ubf_context, main_ip, main_port, node_index, temp_dir, logging_level=None, log_style=None
+):
     # When ray processes start and finish properly it means that the process
     # would have successfully registered as a part of the cluster.
     import ray
 
     try:
         if ubf_context == UBF_CONTROL:
+            cmd = [
+                sys.executable,
+                "-m",
+                "ray.scripts.scripts",
+                "start",
+                "--head",
+                "--node-ip-address",
+                main_ip,
+                "--port",
+                str(main_port),
+                "--temp-dir",
+                temp_dir,
+                "--disable-usage-stats",
+            ]
+            if logging_level:
+                cmd.extend(["--logging-level", logging_level])
+            if log_style:
+                cmd.extend(["--log-style", log_style])
+
             runtime_start_result = subprocess.run(
-                [
-                    sys.executable,
-                    "-m",
-                    "ray.scripts.scripts",
-                    "start",
-                    "--head",
-                    "--node-ip-address",
-                    main_ip,
-                    "--port",
-                    str(main_port),
-                    "--disable-usage-stats",
-                ],
+                cmd,
                 check=True,
                 capture_output=True,
                 text=True,
@@ -65,18 +75,26 @@ def start_ray_processes(ubf_context, main_ip, main_port, node_index):
 
         else:
             node_ip_address = ray._private.services.get_node_ip_address()
+            cmd = [
+                sys.executable,
+                "-m",
+                "ray.scripts.scripts",
+                "start",
+                "--node-ip-address",
+                node_ip_address,
+                "--address",
+                "%s:%s" % (main_ip, main_port),
+                "--temp-dir",
+                temp_dir,
+                "--disable-usage-stats",
+            ]
+            if logging_level:
+                cmd.extend(["--logging-level", logging_level])
+            if log_style:
+                cmd.extend(["--log-style", log_style])
+
             runtime_start_result = subprocess.run(
-                [
-                    sys.executable,
-                    "-m",
-                    "ray.scripts.scripts",
-                    "start",
-                    "--node-ip-address",
-                    node_ip_address,
-                    "--address",
-                    "%s:%s" % (main_ip, main_port),
-                    "--disable-usage-stats",
-                ],
+                cmd,
                 check=True,
                 capture_output=True,
                 text=True,
