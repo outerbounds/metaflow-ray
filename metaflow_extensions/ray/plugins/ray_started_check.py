@@ -5,12 +5,14 @@ import json
 import sys
 
 
-def check_ray_started(main_node_ip):
+def check_ray_started(head_address):
     import ray
 
-    ray.init(
-        _node_ip_address=main_node_ip,
-    )
+    # Connect to the cluster explicitly instead of letting `ray.init()` discover it.
+    # The decorator starts ray with a custom `--temp-dir`, so the address file that
+    # `ray.init()` reads by default (/tmp/ray/ray_current_cluster) is never written,
+    # and an address-less `ray.init()` would silently start its own 1-node cluster.
+    ray.init(address=head_address)
     ray_nodes = ray.nodes()
     print(json.dumps(ray_nodes))
 

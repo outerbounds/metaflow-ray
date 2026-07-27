@@ -2,7 +2,6 @@ import os
 import sys
 from functools import partial
 import json
-import tempfile
 from metaflow.unbounded_foreach import UBF_CONTROL
 from metaflow.plugins.parallel_decorator import (
     ParallelDecorator,
@@ -25,9 +24,10 @@ from .ray_utils import (
     start_ray_processes,
     warning_message,
     wait_for_ray_nodes_to_join,
+    default_ray_temp_dir,
 )
 from .ray_log_tailer import RayLogTailer
-from .constants import RAY_SUFFIX
+from .constants import RAY_SUFFIX, DEFAULT_DASHBOARD_PORT
 
 
 def _worker_node_heartbeat_monitor(
@@ -94,6 +94,8 @@ class RayDecorator(ParallelDecorator):
         "enable_worker_logs": False,  # Stream Ray actor stdout/stderr to stdout
         "logging_level": None,  # Ray logging level (debug, info, warning, error)
         "log_style": None,  # Ray log format (pretty, record, auto)
+        "enable_dashboard": False,  # Start the Ray dashboard on the control node
+        "dashboard_port": DEFAULT_DASHBOARD_PORT,  # Port the dashboard listens on
     }
     IS_PARALLEL = True
     VALID_LOG_STYLES = ["pretty", "record", "auto"]
@@ -116,6 +118,23 @@ class RayDecorator(ParallelDecorator):
                     f"Invalid log_style: '{log_style}'. "
                     f"Valid options are: {', '.join(self.VALID_LOG_STYLES)}"
                 )
+
+        # Validate dashboard_port parameter
+        dashboard_port = self.attributes.get("dashboard_port")
+        if dashboard_port is None:
+            self.attributes["dashboard_port"] = DEFAULT_DASHBOARD_PORT
+        else:
+            # Attributes can reach us as strings when the step is scheduled remotely.
+            try:
+                port = int(str(dashboard_port))
+            except ValueError:
+                port = None
+            if port is None or not 1 <= port <= 65535:
+                raise ValueError(
+                    f"Invalid dashboard_port: '{dashboard_port}'. "
+                    "It must be an integer between 1 and 65535."
+                )
+            self.attributes["dashboard_port"] = port
 
     def task_pre_step(
         self,
@@ -310,8 +329,11 @@ class RayDecorator(ParallelDecorator):
         """
         self.wait_for_all_nodes_to_start()
 
-        # Create a temporary directory for Ray
-        self.ray_temp_dir = tempfile.mkdtemp(prefix="metaflow_ray_")
+        # Let ray use its default temp directory. Ray records the cluster's address in
+        # `<temp_dir>/ray_current_cluster` and that is the only place an address-less
+        # `ray.init()` looks, so pointing ray at a directory of our own would make user
+        # code silently start its own single node cluster instead of joining this one.
+        self.ray_temp_dir = default_ray_temp_dir()
 
         main_port = self._resolve_port()
         main_ip = resolve_main_ip()
@@ -320,8 +342,11 @@ class RayDecorator(ParallelDecorator):
             main_ip,
             main_port,
             current.parallel.node_index,
-            temp_dir=self.ray_temp_dir,
             logging_level=self.attributes["logging_level"],
             log_style=self.attributes["log_style"],
+            enable_dashboard=self.attributes["enable_dashboard"],
+            dashboard_port=self.attributes["dashboard_port"],
         )
-        wait_for_ray_nodes_to_join(self.attributes["all_nodes_started_timeout"] or 300)
+        wait_for_ray_nodes_to_join(
+            self.attributes["all_nodes_started_timeout"] or 300, main_ip, main_port
+        )
