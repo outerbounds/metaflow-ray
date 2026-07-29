@@ -39,8 +39,7 @@ def warning_message(message, prefix="[@metaflow_ray]"):
     print(msg, file=sys.stderr)
 
 
-# Ray renamed this helper between versions, so try both before falling back to the
-# layout ray documents (`<system temp dir>/ray`).
+# Ray renamed this helper between versions, so try both.
 _TEMP_DIR_GETTERS = [
     ("ray._common.utils", "get_default_ray_temp_dir"),  # ray >= 2.40
     ("ray._private.utils", "get_ray_temp_dir"),  # older ray
@@ -49,7 +48,10 @@ _TEMP_DIR_GETTERS = [
 
 def default_ray_temp_dir():
     # The root temp dir that `ray start` uses when `--temp-dir` is not passed. Ray keeps
-    # the cluster address file and the session logs under here.
+    # the cluster address file and the session logs under here. We ask ray for this path
+    # rather than guessing it: ray resolves it differently per platform and honours
+    # RAY_TMPDIR/TMPDIR, so a hardcoded fallback could silently point us at a directory
+    # ray is not using.
     import importlib
 
     for module_name, fn_name in _TEMP_DIR_GETTERS:
@@ -57,9 +59,11 @@ def default_ray_temp_dir():
             return getattr(importlib.import_module(module_name), fn_name)()
         except (ImportError, AttributeError):
             continue
-    import tempfile
-
-    return os.path.join(tempfile.gettempdir(), "ray")
+    raise RayException(
+        "Could not determine the temporary directory used by `ray`. Tried %s. "
+        "This most likely means @metaflow_ray does not support the installed ray "
+        "version yet." % ", ".join("%s.%s" % (m, f) for m, f in _TEMP_DIR_GETTERS)
+    )
 
 
 def start_ray_processes(

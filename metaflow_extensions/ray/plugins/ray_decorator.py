@@ -130,8 +130,8 @@ class RayDecorator(ParallelDecorator):
             except ValueError:
                 port = None
             if port is None or not 1 <= port <= 65535:
-                raise ValueError(
-                    f"Invalid dashboard_port: '{dashboard_port}'. "
+                raise RayException(
+                    f"Invalid dashboard_port provided to @metaflow_ray : '{dashboard_port}'. "
                     "It must be an integer between 1 and 65535."
                 )
             self.attributes["dashboard_port"] = port
