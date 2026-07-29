@@ -13,12 +13,12 @@ jobs:
     - name: Install Python 3.x dependencies
       run: |
         python3 -m pip install --upgrade pip
-        pip3 install setuptools wheel twine
+        pip3 install setuptools build twine
     - name: Build metaflow-ray package
       run: |
-        python3 setup.py sdist bdist_wheel --universal
+        python3 -m build
     - name: Publish metaflow-ray package
-      uses: pypa/gh-action-pypi-publish@81e9d935c883d0b210363ab89cf05f3894778450 #v1.8.14
+      uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 #v1.14.2
       with:
         user: __token__
         password: ${{ secrets.TWINE_PASSWORD }}
