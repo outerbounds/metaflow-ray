@@ -10,6 +10,7 @@ from .exceptions import (
 )
 from metaflow.metaflow_current import current
 from metaflow.unbounded_foreach import UBF_CONTROL
+from .constants import DASHBOARD_HOST, DEFAULT_DASHBOARD_PORT
 
 RAY_NODE_EXTRACTOR_FILE = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "ray_started_check.py"
@@ -38,8 +39,42 @@ def warning_message(message, prefix="[@metaflow_ray]"):
     print(msg, file=sys.stderr)
 
 
+# Ray renamed this helper between versions, so try both.
+_TEMP_DIR_GETTERS = [
+    ("ray._common.utils", "get_default_ray_temp_dir"),  # ray >= 2.40
+    ("ray._private.utils", "get_ray_temp_dir"),  # older ray
+]
+
+
+def default_ray_temp_dir():
+    # The root temp dir that `ray start` uses when `--temp-dir` is not passed. Ray keeps
+    # the cluster address file and the session logs under here. We ask ray for this path
+    # rather than guessing it: ray resolves it differently per platform and honours
+    # RAY_TMPDIR/TMPDIR, so a hardcoded fallback could silently point us at a directory
+    # ray is not using.
+    import importlib
+
+    for module_name, fn_name in _TEMP_DIR_GETTERS:
+        try:
+            return getattr(importlib.import_module(module_name), fn_name)()
+        except (ImportError, AttributeError):
+            continue
+    raise RayException(
+        "Could not determine the temporary directory used by `ray`. Tried %s. "
+        "This most likely means @metaflow_ray does not support the installed ray "
+        "version yet." % ", ".join("%s.%s" % (m, f) for m, f in _TEMP_DIR_GETTERS)
+    )
+
+
 def start_ray_processes(
-    ubf_context, main_ip, main_port, node_index, temp_dir, logging_level=None, log_style=None
+    ubf_context,
+    main_ip,
+    main_port,
+    node_index,
+    logging_level=None,
+    log_style=None,
+    enable_dashboard=False,
+    dashboard_port=DEFAULT_DASHBOARD_PORT,
 ):
     # When ray processes start and finish properly it means that the process
     # would have successfully registered as a part of the cluster.
@@ -57,10 +92,21 @@ def start_ray_processes(
                 main_ip,
                 "--port",
                 str(main_port),
-                "--temp-dir",
-                temp_dir,
                 "--disable-usage-stats",
             ]
+            if enable_dashboard:
+                # The dashboard only ever runs on the head node, and `ray start`
+                # rejects these flags when `--head` is absent.
+                cmd.extend(
+                    [
+                        "--include-dashboard",
+                        "true",
+                        "--dashboard-host",
+                        DASHBOARD_HOST,
+                        "--dashboard-port",
+                        str(dashboard_port),
+                    ]
+                )
             if logging_level:
                 cmd.extend(["--logging-level", logging_level])
             if log_style:
@@ -84,8 +130,6 @@ def start_ray_processes(
                 node_ip_address,
                 "--address",
                 "%s:%s" % (main_ip, main_port),
-                "--temp-dir",
-                temp_dir,
                 "--disable-usage-stats",
             ]
             if logging_level:
@@ -103,10 +147,19 @@ def start_ray_processes(
         process_type = "control" if ubf_context == UBF_CONTROL else "worker"
         e.stderr = e.stderr.replace("\n", "\n\t")
         e.stdout = e.stdout.replace("\n", "\n\t")
-        raise RayException(
+        message = (
             "Ray processes [%s][on node-index %s] failed to start with exception:\n%s\n%s"
             % (process_type, str(node_index), e.stderr, e.stdout)
         )
+        if ubf_context == UBF_CONTROL and enable_dashboard:
+            # `--include-dashboard true` makes ray start fail hard if the dashboard's
+            # dependencies are missing, instead of warning and moving on.
+            message += (
+                "\n\t`@metaflow_ray(enable_dashboard=True)` requires the dashboard's dependencies "
+                "to be installed in the execution environment (`pip install 'ray[default]'`). "
+                "Either install them or set `enable_dashboard=False`."
+            )
+        raise RayException(message)
     warning_message(
         "Ray processes started successfully on node-index %s [%s]"
         % (
@@ -114,25 +167,38 @@ def start_ray_processes(
             "control" if ubf_context == UBF_CONTROL else "worker",
         )
     )
+    if ubf_context == UBF_CONTROL and enable_dashboard:
+        warning_message(
+            "Ray dashboard is running on port %s of the control task [http://%s:%s]. "
+            % (
+                str(dashboard_port),
+                main_ip,
+                str(dashboard_port),
+            )
+        )
     return runtime_start_result
 
 
-def _extract_ray_nodes():
+def _extract_ray_nodes(head_address):
+    # Returns a (nodes, error) tuple. `nodes` is None when the node list could not be
+    # read, in which case `error` explains why; swallowing that error makes cluster
+    # formation problems impossible to diagnose from the task logs.
     try:
         completed_proc = subprocess.run(
-            [sys.executable, RAY_NODE_EXTRACTOR_FILE, resolve_main_ip()],
+            [sys.executable, RAY_NODE_EXTRACTOR_FILE, head_address],
             check=True,
             capture_output=True,
         )
-        data_str = completed_proc.stdout.decode()
-        return json.loads(data_str)
     except subprocess.CalledProcessError as e:
-        return None
+        return None, e.stderr.decode(errors="replace").strip()
+    data_str = completed_proc.stdout.decode()
+    try:
+        return json.loads(data_str), None
     except json.JSONDecodeError:
-        return None
+        return None, "Could not parse the `ray` node list: %s" % data_str.strip()
 
 
-def wait_for_ray_nodes_to_join(max_wait_time):
+def wait_for_ray_nodes_to_join(max_wait_time, main_ip, main_port):
     # This function will wait untill all ray nodes have joined the cluster.
     # If nodes have not joined after a certain amount of timeout it will raise an exception.
     # We leverage subprocesses to extract the number of nodes that have joined the cluster.
@@ -140,10 +206,11 @@ def wait_for_ray_nodes_to_join(max_wait_time):
     # Extracting number of nodes in a separate subprocess ensures that when users call `ray.init`,
     # ray will not end up throwing and exception.
 
+    head_address = "%s:%s" % (main_ip, main_port)
     start_time = time.time()
     _iters = 0
     while True:
-        ray_nodes = _extract_ray_nodes()
+        ray_nodes, probe_error = _extract_ray_nodes(head_address)
         if ray_nodes is not None:
             if len(ray_nodes) == current.parallel.num_nodes:
                 warning_message(
@@ -155,12 +222,23 @@ def wait_for_ray_nodes_to_join(max_wait_time):
         if _iters % 10 == 0:
             warning_message(
                 "Waiting for all `ray` nodes to join the cluster. Current number of nodes in cluster: %s"
-                % str(len(ray_nodes))
+                % (str(len(ray_nodes)) if ray_nodes is not None else "unknown")
             )
+            if probe_error:
+                warning_message(
+                    "Could not read the `ray` node list from %s: %s"
+                    % (head_address, probe_error)
+                )
         _iters += 1
         time.sleep(1)
         if time.time() - start_time > max_wait_time:
-            raise RayException(
+            message = (
                 "All `ray` nodes did not join the cluster in %s seconds."
                 % max_wait_time
             )
+            if probe_error:
+                message += (
+                    " The last attempt to read the node list from %s failed with: %s"
+                    % (head_address, probe_error)
+                )
+            raise RayException(message)
